@@ -50,6 +50,15 @@ class ConfigurationRegressionTests(unittest.TestCase):
             self.assertEqual(config["CONFIG_IMAGEOPT"], "y")
             self.assertEqual(config["CONFIG_VERSIONOPT"], "y")
 
+    def test_istore_tar_xz_provider_is_explicitly_selected(self):
+        # Generated Kconfig requires PACKAGE_xz-utils when PACKAGE_TAR_XZ is on,
+        # including for applications such as iStore that transitively select tar.
+        seed = Path(__file__).resolve().parent.parent / "immortalwrt-netcore-n60-pro-honk.config"
+        config = validate.read_config(seed)
+        self.assertEqual(config["CONFIG_PACKAGE_luci-app-store"], "y")
+        self.assertEqual(config["CONFIG_PACKAGE_tar"], "y")
+        self.assertEqual(config["CONFIG_PACKAGE_xz-utils"], "y")
+
 
 if __name__ == "__main__":
     unittest.main()

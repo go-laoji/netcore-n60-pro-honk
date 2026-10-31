@@ -20,7 +20,7 @@ REQUIRED_PACKAGES = (
     "luci-i18n-upnp-zh-cn", "miniupnpd-nftables",
     "luci-theme-argon", "luci-app-argon-config", "luci-i18n-argon-config-zh-cn",
     "luci-app-quickstart", "luci-i18n-quickstart-zh-cn", "quickstart", "luci-compat",
-    "luci-app-store", "luci-lib-taskd", "luci-lib-xterm", "taskd", "tar", "libuci-lua",
+    "luci-app-store", "luci-lib-taskd", "luci-lib-xterm", "taskd", "tar", "xz-utils", "libuci-lua",
     "kmod-nft-offload",
 )
 EXCLUDED_PACKAGES = (

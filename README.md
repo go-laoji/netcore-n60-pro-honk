@@ -30,7 +30,7 @@
 
 不引入 small-package 聚合源，不安装 dae/daed/daede、OpenClash/Mihomo、Nikki、HomeProxy/Sing-box、PassWall、SSR Plus、VSSR、Xray、V2Ray 核心或其他代理。也不集成 AdGuardHome、MosDNS、SmartDNS。源码 feeds 中未选中的软件包不会因此进入固件。
 
-默认关闭 `bridger` 和 nft flow offload 模块；首次启动的 UCI defaults 脚本关闭防火墙软件/硬件 flow offloading，使流量经过透明代理路径。旧固件配置不应直接恢复到新布局和新网络驱动上。Honk 保持上游未初始化、未启用的默认状态，不内置订阅、节点、密码或 API 密钥。
+默认关闭 `bridger`，首次启动的 UCI defaults 脚本关闭防火墙软件/硬件 flow offloading，使流量经过透明代理路径。firewall4 强制依赖 `kmod-nft-offload`，因此保留该内核模块；模块安装与流量卸载功能开启是两回事，运行开关仍设为 `0`。旧固件配置不应直接恢复到新布局和新网络驱动上。Honk 保持上游未初始化、未启用的默认状态，不内置订阅、节点、密码或 API 密钥。
 
 ### Argon 与 QuickStart
 
@@ -62,6 +62,7 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取分支最新源码、记录实际 SHA、验证版本、安装 feeds、复制配置 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
+| `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
 | `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
 | `files/etc/uci-defaults/zz-honk-ui` | 在主题包默认脚本后将 Argon 设为默认皮肤 |
 | `.github/workflows/build-honk.yml` | 唯一的固件构建流程 |
@@ -88,12 +89,16 @@ git push -u origin develop
 
 流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件。
 
-配置检查会确认只有 N60 Pro、Honk 和必需依赖均被选中、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理或 flow offload。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue 和网络命名空间。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
+配置检查会确认只有 N60 Pro、Honk 和必需依赖均被选中、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue 和网络命名空间。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
+
+配置展开前会注销未使用的 `luci-app-weechat`，避开当前固定 feed 在 Kconfig 中触发的自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
+
+iStore/QuickStart 的依赖中显式选择 GNU tar、`libuci-lua` 和 tar 的 XZ 提供者 `xz-utils`，满足生成 Kconfig 的条件依赖，避免管理页在配置展开时被丢弃。
 
 成功后，在该次运行的 **Artifacts** 下载：
 
 - `netcore-n60-pro-honk-go-laoji-MM-DD-<run_id>-<attempt>`：已通过检查的 N60 Pro 主镜像、可用的恢复镜像、manifest、镜像元数据、构建版本信息、展开配置、内核配置、版本标识记录、实际 rootfs 的版本文件、输入提交记录和 `sha256sums`。默认保存 30 天。
-- `honk-build-logs-<run_id>-<attempt>`：准备/下载/编译日志、配置和输入记录。失败时也尝试上传已产生的诊断文件，默认保存 14 天。
+- `honk-build-logs-<run_id>-<attempt>`：准备/下载/编译日志、配置、输入记录及生成的包 Kconfig/packageinfo。失败时也尝试上传已产生的诊断文件，默认保存 14 天。
 
 本地没有执行配置展开、工具链构建或固件编译；编译是否成功由首次 Actions 运行验证，刷机和 Honk 实际路由行为仍需在布局匹配的设备上验收。
 
@@ -123,6 +128,7 @@ bash -n scripts/prepare-source.sh
 sh -n files/etc/uci-defaults/99-honk-routing
 sh -n files/etc/uci-defaults/zz-honk-ui
 python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
+python3 -B scripts/test_ci_config.py
 git diff --check
 ```
 
@@ -135,7 +141,7 @@ shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)。
 
 ## 许可与致谢
 
