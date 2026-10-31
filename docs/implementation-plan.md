@@ -96,6 +96,7 @@
 - firewall4 的实际包定义强制依赖 `kmod-nft-offload`。保留模块作为依赖，继续由 UCI defaults 关闭软件/硬件 flow offloading，不再以模块存在判断加速已开启。
 - iStore/quickstart 管理页被丢弃时，`tar` 和 `libuci-lua` 未选中；第一次修复验证后，新增包 Kconfig artifact 显示 GNU tar 默认 XZ 支持还要求具体虚拟包提供者 `xz-utils`。显式加入这些依赖，并通过展开配置继续验收管理页和后端。
 - 日志 artifact 增加生成的包 Kconfig 和 packageinfo，支持诊断后续依赖问题；本地只检查脚本、日志样例和配置，不运行 OpenWrt 构建。
+- 第二次修复配置已保留所有必需包，但校验器将未启用 PassWall 的 `INCLUDE_Haproxy` 默认子选项误当成软件包。展开配置的代理扫描改为依据 `tmp/.packageinfo`，实际代理包和编译后的 manifest 检查保留。
 
 进度：
 
@@ -103,4 +104,4 @@
 2. [x] 修复配置、feeds 处理与诊断，补充聚焦回归检查并提交。
 3. [ ] 推送修复分支，通过 GitHub Actions 验证原失败阶段，回填 Issue 结果。
 
-本地验证：4 个标准库回归测试通过，覆盖 Kconfig 自依赖报错后仍写配置、非致命 warning 放行、版本生成补齐 IMAGEOPT，以及 iStore 的 GNU tar/XZ 提供者选项。配置种子、ShellCheck、actionlint 和 `git diff --check` 通过。原失败日志可由新日志验收直接识别。远程配置展开和后续构建待推送后的 Actions 验证。
+本地验证：6 个标准库回归测试通过，覆盖 Kconfig 自依赖报错后仍写配置、非致命 warning 放行、版本生成补齐 IMAGEOPT、iStore 的 GNU tar/XZ 提供者选项，以及特性开关与真实代理包的区分。配置种子、ShellCheck、actionlint 和 `git diff --check` 通过。原失败日志由新日志验收直接识别；使用第 2 次修复 CI 保存的真实 `.config`、版本 JSON 和 packageinfo，完整展开配置检查已通过。新提交的远程验证继续进行。

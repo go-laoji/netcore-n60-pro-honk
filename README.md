@@ -95,6 +95,8 @@ git push -u origin develop
 
 iStore/QuickStart 的依赖中显式选择 GNU tar、`libuci-lua` 和 tar 的 XZ 提供者 `xz-utils`，满足生成 Kconfig 的条件依赖，避免管理页在配置展开时被丢弃。
 
+展开配置的代理检查使用 `tmp/.packageinfo` 区分真实软件包与 `PACKAGE_*_INCLUDE_*` 等特性开关。未启用应用的默认子选项不代表安装了该应用；真实代理包仍逐项拒绝，编译后还会检查实际 manifest。
+
 成功后，在该次运行的 **Artifacts** 下载：
 
 - `netcore-n60-pro-honk-go-laoji-MM-DD-<run_id>-<attempt>`：已通过检查的 N60 Pro 主镜像、可用的恢复镜像、manifest、镜像元数据、构建版本信息、展开配置、内核配置、版本标识记录、实际 rootfs 的版本文件、输入提交记录和 `sha256sums`。默认保存 30 天。

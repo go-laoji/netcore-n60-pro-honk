@@ -77,7 +77,7 @@ jobs:
           python3 "$GITHUB_WORKSPACE/scripts/validate.py" defconfig-log \
             "$GITHUB_WORKSPACE/build-logs/defconfig.log"
           python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded \
-            --version-file firmware-version.json
+            --version-file firmware-version.json --package-info tmp/.packageinfo
           ./scripts/diffconfig.sh > "$GITHUB_WORKSPACE/build-logs/config.diff"
           cp .config "$GITHUB_WORKSPACE/build-logs/expanded.config"
           cp build-inputs.txt "$GITHUB_WORKSPACE/build-logs/"

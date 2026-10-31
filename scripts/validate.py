@@ -97,22 +97,35 @@ def read_version(path):
     return info
 
 
-def check_config(path, expanded, version_file=None):
+def check_proxy_packages(config, package_names=None):
+    for key, value in config.items():
+        if key.startswith("CONFIG_PACKAGE_") and value in ("y", "m"):
+            name = key.removeprefix("CONFIG_PACKAGE_")
+            # Kconfig also uses PACKAGE_* for feature toggles such as
+            # luci-app-passwall_INCLUDE_Haproxy, even when the app is disabled.
+            if package_names is not None and name not in package_names:
+                continue
+            require(not OTHER_PROXY.match(name), f"Unexpected proxy package: {name}={value}")
+
+
+def check_config(path, expanded, version_file=None, package_info=None):
     config = read_config(path)
     for key, expected in REQUIRED_CONFIG.items():
         require(config.get(key, "n") == expected, f"Expected {key}={expected}")
     devices = [key for key, value in config.items()
                if re.fullmatch(r"CONFIG_TARGET_.*_DEVICE_.*", key) and value == "y"]
     require(devices == [DEVICE], f"Expected only N60 Pro; selected devices: {devices}")
-    for key, value in config.items():
-        if key.startswith("CONFIG_PACKAGE_") and value in ("y", "m"):
-            name = key.removeprefix("CONFIG_PACKAGE_")
-            require(not OTHER_PROXY.match(name), f"Unexpected proxy package: {name}={value}")
+    package_names = None
+    if package_info is not None:
+        package_names = set(re.findall(r"^Package: (\S+)$", package_info.read_text(), re.M))
+        require(package_names, "Package metadata is empty")
+    check_proxy_packages(config, package_names)
     if expanded:
         require(config.get("CONFIG_TARGET_ARCH_PACKAGES") == '"aarch64_cortex-a53"',
                 "Unexpected target package architecture")
         require(config.get("CONFIG_LINUX_6_12") == "y", "Expected Linux 6.12 target")
         require(version_file is not None, "Expanded config check needs --version-file")
+        require(package_info is not None, "Expanded config check needs --package-info")
     if version_file is not None:
         info = read_version(version_file)
         require(config.get("CONFIG_VERSION_CODE") == json.dumps(info["version_code"]),
@@ -211,16 +224,20 @@ def main():
                         help="Also check generated target architecture and kernel symbols")
     parser.add_argument("--version-file", type=Path,
                         help="firmware-version.json generated during source preparation")
+    parser.add_argument("--package-info", type=Path,
+                        help="tmp/.packageinfo lists real packages, excluding Kconfig feature toggles")
     args = parser.parse_args()
     try:
         if args.kind == "config":
-            check_config(args.path, args.expanded, args.version_file)
+            check_config(args.path, args.expanded, args.version_file, args.package_info)
         elif args.kind == "release":
             require(not args.expanded, "--expanded is only valid for config checks")
+            require(args.package_info is None, "--package-info is only valid for config checks")
             check_release(args.path, args.version_file)
         else:
             require(not args.expanded, "--expanded is only valid for config checks")
             require(args.version_file is None, "--version-file needs config or release")
+            require(args.package_info is None, "--package-info is only valid for config checks")
             {"source": check_source, "kernel": check_kernel,
              "manifest": check_manifest, "ui": check_ui,
              "defconfig-log": check_defconfig_log}[args.kind](args.path)

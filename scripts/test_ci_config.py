@@ -59,6 +59,18 @@ class ConfigurationRegressionTests(unittest.TestCase):
         self.assertEqual(config["CONFIG_PACKAGE_tar"], "y")
         self.assertEqual(config["CONFIG_PACKAGE_xz-utils"], "y")
 
+    def test_disabled_proxy_feature_toggle_is_not_a_package(self):
+        validate.check_proxy_packages(
+            {"CONFIG_PACKAGE_honk": "y", "CONFIG_PACKAGE_luci-app-passwall": "n",
+             "CONFIG_PACKAGE_luci-app-passwall_INCLUDE_Haproxy": "y"},
+            {"honk", "luci-app-passwall"},
+        )
+
+    def test_actual_proxy_packages_are_still_rejected(self):
+        for name, mode in (("luci-app-passwall", "y"), ("sing-box", "m")):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Unexpected proxy package"):
+                validate.check_proxy_packages({f"CONFIG_PACKAGE_{name}": mode}, {name})
+
 
 if __name__ == "__main__":
     unittest.main()
