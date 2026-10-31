@@ -76,13 +76,13 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 3. 手动重建可用 **Run workflow**。GitHub 要求 workflow 文件先存在于默认分支，按钮才会出现；首次推送功能分支时可先通过 `push` 事件构建。
 4. 同一分支的新构建会取消该分支尚未完成的旧构建。不同分支互不影响。
 
-当前功能分支的首次推送命令：
+功能通过 Git Flow 合入 `develop` 后，推送该分支即可触发构建：
 
 ```sh
-git push -u origin feature/honk-only-build
+git push -u origin develop
 ```
 
-本次配置编写不会代为执行推送或 `git flow feature finish`。工作流只需默认的 `GITHUB_TOKEN` 只读仓库权限，无需添加 PAT、第三方上传 token 或订阅密钥；产物通过 Actions Artifacts 下载，不自动创建 Release，不清理历史 Release 或运行记录。
+工作流只需默认的 `GITHUB_TOKEN` 只读仓库权限，无需添加 PAT、第三方上传 token 或订阅密钥；产物通过 Actions Artifacts 下载，不自动创建 Release，不清理历史 Release 或运行记录。
 
 ## 构建流程和产物
 
