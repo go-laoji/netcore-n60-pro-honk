@@ -1,0 +1,6 @@
+# Official openwrt-25.12 feeds and Honk, pinned on 2026-10-31.
+# Keep Honk first so its package definitions take priority.
+src-git honk https://github.com/kenzok8/openwrt-honk.git^e1a68ffcced979a2b2c659010a22cd0281482947
+src-git packages https://github.com/immortalwrt/packages.git^2dba1dd2af3b447faf52f85c0850a6f9667cac17
+src-git luci https://github.com/immortalwrt/luci.git^c84adb975e207ae8b14982191838ec6218d632cd
+src-git routing https://github.com/openwrt/routing.git^48c808034414a2112cf9d5261a20a320e8d0d170
