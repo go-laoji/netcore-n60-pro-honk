@@ -106,4 +106,25 @@
 
 本地验证：6 个标准库回归测试通过，覆盖 Kconfig 自依赖报错后仍写配置、非致命 warning 放行、版本生成补齐 IMAGEOPT、iStore 的 GNU tar/XZ 提供者选项，以及特性开关与真实代理包的区分。配置种子、ShellCheck、actionlint 和 `git diff --check` 通过。原失败日志由新日志验收直接识别；使用第 2 次修复 CI 保存的真实 `.config`、版本 JSON 和 packageinfo，完整展开配置检查已通过。
 
-远程验证：[run 41167469654 / job 124438032022](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41167469654/job/124438032022)，修复提交 `0920cc5`。源码准备和 `Expand and verify build configuration` 均已成功，进入 `Download sources` 阶段；原失败环节已修复，完整固件编译结果仍待本次运行完成。修复位于 `feature/fix-ci-defconfig`，未自动 finish 合入 develop。本地未执行固件构建。
+远程验证：[run 41167469654 / job 124438032022](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41167469654/job/124438032022)，修复提交 `0920cc5`。源码准备、配置展开、完整编译和固件验收均已成功，已生成固件 artifact。修复位于 `feature/fix-ci-defconfig`，未自动 finish 合入 develop。本地未执行固件构建。
+
+## 固件 Release 发布（Issue #7）
+
+跟踪：[Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)。已核实 run `41167469654` 编译和验收全部成功，存在已校验固件 artifact。
+
+- 默认构建成功并上传 artifact 后，由独立发布 job 下载同次产物；只有发布 job 获得 `contents: write` 和跨运行读取产物所需的 `actions: read`。
+- 发布名使用最终 `openwrt_release` 中的版本描述，加实际创建 Release 时的北京时间 `HH:MM`。时间在编译完成后的发布步骤中取得，不取构建开始或配置日期。
+- Git tag 使用合法化的固件版本和发布年月日时分；现有 tag/Release 不覆盖。校验产物 SHA256，完整上传后公开发布。
+- 手动运行允许填写已有成功的构建 run ID，仅补发 Release、跳过重新编译；校验源运行成功、workflow 来源及最新尝试的固件 artifact，并将 tag 指向实际构建提交。
+- 本次使用已有成功 run 的固件验证发布，不在本地或远程重复编译；文档不包含本地用户目录路径，不自动 finish 分支。
+
+进度：
+
+1. [x] 创建 Issue，确认成功运行、现有产物和官方下载 action 接口。
+2. [x] 实现版本/校验和驱动的发布脚本及聚焦测试。
+3. [x] 接入独立发布 job、手动补发入口和使用说明，静态验证并推送。
+4. [x] 用已有成功产物实测发布，记录 Release 链接后回填并关闭 Issue。
+
+本次验证：5 个发布回归测试和原有 6 个 CI 配置测试全部通过，覆盖北京时间跨日、保留固件内编译日期、发布时间命名、产物被修改/缺失时拒绝发布、草稿完整上传后公开及上传失败不公开。配置种子、Python 语法、actionlint（含 ShellCheck）、受版本管理文件的隐私路径检查和 `git diff --check` 通过。
+
+远程验证：[发布 run 41174550410](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41174550410)，提交 `d47c1e4`，`build` 跳过、`publish` 成功。来源为成功构建 `41167469654` 的 artifact `13032370350`，没有重新编译。公开的 [Release](https://github.com/go-laoji/netcore-n60-pro-honk/releases/tag/firmware-immortalwrt-25-12-snapshot-r0-3682a14-go-laoji-10-31-20261031-1356) 名称为 `ImmortalWrt 25.12-SNAPSHOT r0-3682a14 go-laoji-10/31 13:56`，于北京时间 2026-10-31 13:56 发布，14 个资产均为已上传状态，tag 指向原固件构建提交 `0920cc5fe3943efc2b1eb06896e7c9f4de66e7ff`。代码位于 `feature/firmware-release`，未自动 finish。

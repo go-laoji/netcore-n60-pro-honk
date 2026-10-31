@@ -63,9 +63,11 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
 | `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
+| `scripts/publish_release.py` | 校验已有产物，以固件实际版本和发布时刻创建 Release |
+| `scripts/test_release.py` | 回归验证发布时间、资产校验及草稿上传后发布 |
 | `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
 | `files/etc/uci-defaults/zz-honk-ui` | 在主题包默认脚本后将 Argon 设为默认皮肤 |
-| `.github/workflows/build-honk.yml` | 唯一的固件构建流程 |
+| `.github/workflows/build-honk.yml` | 固件构建、验收和 Release 发布流程 |
 | `docs/implementation-plan.md` | 实施范围、验证边界与完成状态 |
 
 ## 触发 GitHub Actions
@@ -74,7 +76,7 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 
 1. 推送本仓库到 GitHub。向 `main`、`develop` 或 `feature/**` 分支推送构建配置、feeds、脚本、`files/` 或 workflow 的改动时，会自动构建。仅修改 README/计划文档不会触发昂贵的固件编译。
 2. 打开 **Actions → N60 Pro - ImmortalWrt 6.12 + Honk** 查看进度。
-3. 手动重建可用 **Run workflow**。GitHub 要求 workflow 文件先存在于默认分支，按钮才会出现；首次推送功能分支时可先通过 `push` 事件构建。
+3. 手动重建可用 **Run workflow**，将 `publish_run_id` 留空。若只想补发已有成功构建的 Release，填写该次运行的数字 ID，例如 `41167469654`，即可跳过构建、直接校验并发布该次产物。源运行必须是本 workflow 的成功运行，且最新一次尝试的固件 artifact 尚未过期。GitHub 要求 workflow 文件先存在于默认分支，按钮才会出现；首次推送功能分支时可先通过 `push` 事件构建。
 4. 同一分支的新构建会取消该分支尚未完成的旧构建。不同分支互不影响。
 
 功能通过 Git Flow 合入 `develop` 后，推送该分支即可触发构建：
@@ -83,11 +85,11 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 git push -u origin develop
 ```
 
-工作流只需默认的 `GITHUB_TOKEN` 只读仓库权限，无需添加 PAT、第三方上传 token 或订阅密钥；产物通过 Actions Artifacts 下载，不自动创建 Release，不清理历史 Release 或运行记录。
+工作流使用内置 `GITHUB_TOKEN`，无需添加 PAT、第三方上传 token 或订阅密钥。构建 job 保持仓库只读权限；独立发布 job 使用 `contents: write` 创建 Release，并使用 `actions: read` 读取固件 artifact。产物同时保留在 Actions Artifacts 和 Release 中，不清理历史 Release 或运行记录。
 
 ## 构建流程和产物
 
-流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件。
+流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件 artifact → 下载并校验 SHA256 和固件版本 → 发布 Release。
 
 配置检查会确认只有 N60 Pro、Honk 和必需依赖均被选中、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue 和网络命名空间。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
 
@@ -102,7 +104,11 @@ iStore/QuickStart 的依赖中显式选择 GNU tar、`libuci-lua` 和 tar 的 XZ
 - `netcore-n60-pro-honk-go-laoji-MM-DD-<run_id>-<attempt>`：已通过检查的 N60 Pro 主镜像、可用的恢复镜像、manifest、镜像元数据、构建版本信息、展开配置、内核配置、版本标识记录、实际 rootfs 的版本文件、输入提交记录和 `sha256sums`。默认保存 30 天。
 - `honk-build-logs-<run_id>-<attempt>`：准备/下载/编译日志、配置、输入记录及生成的包 Kconfig/packageinfo。失败时也尝试上传已产生的诊断文件，默认保存 14 天。
 
-本地没有执行配置展开、工具链构建或固件编译；编译是否成功由首次 Actions 运行验证，刷机和 Honk 实际路由行为仍需在布局匹配的设备上验收。
+固件 artifact 中的全部文件还会作为独立资产发布到 [Releases](https://github.com/go-laoji/netcore-n60-pro-honk/releases)。发布前再次验证完整的 `sha256sums` 和实际固件版本；先上传到草稿，全部成功后公开，避免公开缺少文件的固件。
+
+Release 名称使用最终 `openwrt_release` 的 `DISTRIB_DESCRIPTION`，追加**创建 Release 时**的北京时间 `HH:MM`，例如 `ImmortalWrt 25.12-SNAPSHOT rXXXXX-abcdef go-laoji-10/31 21:35`。时分在编译完成后的发布步骤中取得；固件内的 `go-laoji-MM/DD` 仍表示编译配置日期，跨日补发时保持原值。Git tag 使用合法化的版本名和发布年月日时分，例如 `firmware-immortalwrt-25-12-snapshot-rxxxxx-abcdef-go-laoji-10-31-20261031-2135`，并指向生成该固件的仓库提交；已有 Release 不会被覆盖。
+
+本地没有执行配置展开、工具链构建或固件编译；[run 41167469654](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41167469654) 已完成云端编译和验收。刷机和 Honk 实际路由行为仍需在布局匹配的设备上验收。
 
 ## Honk 首次使用
 
@@ -131,6 +137,7 @@ sh -n files/etc/uci-defaults/99-honk-routing
 sh -n files/etc/uci-defaults/zz-honk-ui
 python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
 python3 -B scripts/test_ci_config.py
+python3 -B scripts/test_release.py
 git diff --check
 ```
 
@@ -143,7 +150,7 @@ shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)、[Release 发布 Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)。
 
 ## 许可与致谢
 
