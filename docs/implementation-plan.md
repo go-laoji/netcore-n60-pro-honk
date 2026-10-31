@@ -102,6 +102,8 @@
 
 1. [x] 读取实际失败日志与配置，核对上游包定义，创建修复分支和 Issue。
 2. [x] 修复配置、feeds 处理与诊断，补充聚焦回归检查并提交。
-3. [ ] 推送修复分支，通过 GitHub Actions 验证原失败阶段，回填 Issue 结果。
+3. [x] 推送修复分支，通过 GitHub Actions 验证原失败阶段，回填 Issue 结果。
 
-本地验证：6 个标准库回归测试通过，覆盖 Kconfig 自依赖报错后仍写配置、非致命 warning 放行、版本生成补齐 IMAGEOPT、iStore 的 GNU tar/XZ 提供者选项，以及特性开关与真实代理包的区分。配置种子、ShellCheck、actionlint 和 `git diff --check` 通过。原失败日志由新日志验收直接识别；使用第 2 次修复 CI 保存的真实 `.config`、版本 JSON 和 packageinfo，完整展开配置检查已通过。新提交的远程验证继续进行。
+本地验证：6 个标准库回归测试通过，覆盖 Kconfig 自依赖报错后仍写配置、非致命 warning 放行、版本生成补齐 IMAGEOPT、iStore 的 GNU tar/XZ 提供者选项，以及特性开关与真实代理包的区分。配置种子、ShellCheck、actionlint 和 `git diff --check` 通过。原失败日志由新日志验收直接识别；使用第 2 次修复 CI 保存的真实 `.config`、版本 JSON 和 packageinfo，完整展开配置检查已通过。
+
+远程验证：[run 41167469654 / job 124438032022](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41167469654/job/124438032022)，修复提交 `0920cc5`。源码准备和 `Expand and verify build configuration` 均已成功，进入 `Download sources` 阶段；原失败环节已修复，完整固件编译结果仍待本次运行完成。修复位于 `feature/fix-ci-defconfig`，未自动 finish 合入 develop。本地未执行固件构建。
