@@ -18,6 +18,9 @@ REQUIRED_PACKAGES = (
     "kmod-mt7915e", "kmod-mt7986-firmware", "mt7986-wo-firmware", "kmod-usb3",
     "wpad-openssl", "luci", "luci-base", "luci-app-upnp",
     "luci-i18n-upnp-zh-cn", "miniupnpd-nftables",
+    "luci-theme-argon", "luci-app-argon-config", "luci-i18n-argon-config-zh-cn",
+    "luci-app-quickstart", "luci-i18n-quickstart-zh-cn", "quickstart", "luci-compat",
+    "luci-app-store", "luci-lib-taskd", "luci-lib-xterm", "taskd",
 )
 EXCLUDED_PACKAGES = (
     "bridger", "kmod-nft-offload", "luci-app-turboacc", "luci-app-turboacc-mtk",
@@ -178,9 +181,21 @@ def check_release(path, version_file):
             "Expected upstream release number without custom date suffix")
 
 
+def check_ui(path):
+    assets = path / "www/luci-static/argon"
+    require(assets.is_dir() and any(assets.rglob("*.css")), "Argon theme assets are missing")
+    backend = path / "usr/sbin/quickstart"
+    require(backend.is_file() and backend.stat().st_mode & 0o111,
+            "Quickstart executable backend is missing")
+    require((path / "usr/lib/lua/luci/controller/quickstart.lua").is_file(),
+            "Quickstart LuCI controller is missing")
+    require((path / "etc/uci-defaults/zz-honk-ui").is_file(),
+            "Default Argon theme setup is missing")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("config", "source", "kernel", "manifest", "release"))
+    parser.add_argument("kind", choices=("config", "source", "kernel", "manifest", "release", "ui"))
     parser.add_argument("path", type=Path)
     parser.add_argument("--expanded", action="store_true",
                         help="Also check generated target architecture and kernel symbols")
@@ -197,7 +212,7 @@ def main():
             require(not args.expanded, "--expanded is only valid for config checks")
             require(args.version_file is None, "--version-file needs config or release")
             {"source": check_source, "kernel": check_kernel,
-             "manifest": check_manifest}[args.kind](args.path)
+             "manifest": check_manifest, "ui": check_ui}[args.kind](args.path)
     except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"Validation failed: {error}", file=sys.stderr)
         return 1

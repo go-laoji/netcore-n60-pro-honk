@@ -41,14 +41,26 @@ done < feeds.conf.default
 
 test -f feeds/honk/honk/Makefile
 test -f feeds/honk/luci-app-honk/Makefile
+test -f feeds/luci/themes/luci-theme-argon/Makefile
+test -f feeds/luci/applications/luci-app-argon-config/Makefile
+test -f feeds/nas/network/services/quickstart/Makefile
+test -f feeds/nas_luci/luci/luci-app-quickstart/Makefile
+test -f feeds/istore/luci/luci-app-store/Makefile
+test -f feeds/istore/luci/luci-lib-taskd/Makefile
+test -f feeds/istore/luci/luci-lib-xterm/Makefile
+test -f feeds/istore/luci/taskd/Makefile
 ./scripts/feeds install -a
 ./scripts/feeds install -f -p honk honk luci-app-honk
+./scripts/feeds install -f -p luci luci-theme-argon luci-app-argon-config luci-compat
+./scripts/feeds install -f -p nas quickstart
+./scripts/feeds install -f -p nas_luci luci-app-quickstart
+./scripts/feeds install -f -p istore luci-app-store luci-lib-taskd luci-lib-xterm taskd
 
 cp "$PROJECT_DIR/$CONFIG_FILE" .config
 python3 "$PROJECT_DIR/scripts/stamp-version.py" .
 mkdir -p files
 cp -a "$PROJECT_DIR/files/." files/
-chmod +x files/etc/uci-defaults/99-honk-routing
+chmod +x files/etc/uci-defaults/99-honk-routing files/etc/uci-defaults/zz-honk-ui
 
 {
     printf 'Firmware repository: %s\nFirmware branch: %s\nFirmware commit: %s\n' \

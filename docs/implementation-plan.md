@@ -53,3 +53,18 @@
 3. [x] 更新 README，完成静态验证、隐私检查，并在 Issue 中回复结果后关闭。
 
 本次验证：ShellCheck、actionlint、Bash/sh 和 Python 语法、配置种子、`git diff --check` 均通过。18 个临时版本/manifest/UCI 场景通过，覆盖北京时间跨日、跨年、闰日、重复生成、上游版本和源地址保留、实际版本描述缺失/日期错误、文件名斜杠保护、UPnP 缺包/错误后端和 TurboACC/SFE 泄漏。受版本管理文件和 Git 文本对象隐私检查通过。未本地构建、未推送；首次 Actions 和实机 UPnP/Honk 验收仍待后续完成。
+
+## Argon 和 quickstart（Issue #4）
+
+跟踪：[Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)。
+
+- Argon 和 argon-config 使用已固定的官方 LuCI feed；增加中文配置页，并在最后执行的 UCI defaults 脚本中明确选择 `/luci-static/argon` 为默认主题。
+- quickstart 使用 LinkEase 官方已发布包定义；固定 `nas-packages`、`nas-packages-luci` 和 `istoreos/istore` 提交，补齐 quickstart 后端、上游要求的 iStore/taskd 组件及 Lua 兼容支持。不使用开发中的 `istoreos/quickstart` 仓库，不增加代理服务。
+- 配置展开和固件 manifest 必须包含请求的主题/应用及关键依赖；编译后核对 Argon 静态资源、quickstart 后端与默认主题脚本。
+- 保持本地仅做静态及临时样例验证，不展开 OpenWrt 配置或构建固件。
+
+进度：
+
+1. [x] 创建 Issue，核对固定 LuCI feed、quickstart 正式包及依赖。
+2. [x] 增加固定 feeds、软件包选项、默认主题和 Actions 验收，分步提交。
+3. [ ] 更新 README，完成静态与隐私检查，在 Issue 回填结果并关闭。

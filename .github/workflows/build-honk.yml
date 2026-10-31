@@ -45,6 +45,7 @@ jobs:
           mkdir -p build-logs
           bash -n scripts/prepare-source.sh
           sh -n files/etc/uci-defaults/99-honk-routing
+          sh -n files/etc/uci-defaults/zz-honk-ui
           python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
 
       - name: Prepare Linux build environment
@@ -120,6 +121,9 @@ jobs:
           python3 scripts/validate.py release "${release_files[0]}" \
             --version-file "$OPENWRT_DIR/firmware-version.json"
           cp "${release_files[0]}" build-logs/openwrt_release
+          rootfs_dir=$(dirname -- "$(dirname -- "${release_files[0]}")")
+          python3 scripts/validate.py ui "$rootfs_dir"
+          cmp -- files/etc/uci-defaults/zz-honk-ui "$rootfs_dir/etc/uci-defaults/zz-honk-ui"
 
       - name: Collect N60 Pro firmware
         run: |
