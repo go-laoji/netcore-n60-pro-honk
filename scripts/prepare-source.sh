@@ -45,6 +45,7 @@ test -f feeds/honk/luci-app-honk/Makefile
 ./scripts/feeds install -f -p honk honk luci-app-honk
 
 cp "$PROJECT_DIR/$CONFIG_FILE" .config
+python3 "$PROJECT_DIR/scripts/stamp-version.py" .
 mkdir -p files
 cp -a "$PROJECT_DIR/files/." files/
 chmod +x files/etc/uci-defaults/99-honk-routing
@@ -55,4 +56,6 @@ chmod +x files/etc/uci-defaults/99-honk-routing
     printf 'Configuration repository commit: %s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
     printf '\nPinned feeds:\n'
     cat feeds.conf.default
+    printf '\nFirmware version:\n'
+    cat firmware-version.json
 } > build-inputs.txt

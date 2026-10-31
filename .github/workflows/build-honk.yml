@@ -72,10 +72,14 @@ jobs:
         run: |
           cd "$OPENWRT_DIR"
           make defconfig 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/defconfig.log"
-          python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded
+          python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded \
+            --version-file firmware-version.json
           ./scripts/diffconfig.sh > "$GITHUB_WORKSPACE/build-logs/config.diff"
           cp .config "$GITHUB_WORKSPACE/build-logs/expanded.config"
           cp build-inputs.txt "$GITHUB_WORKSPACE/build-logs/"
+          cp firmware-version.json "$GITHUB_WORKSPACE/build-logs/"
+          echo "FIRMWARE_TAG=$(jq -r .filename_tag firmware-version.json)" >> "$GITHUB_ENV"
+          echo "FIRMWARE_LABEL=$(jq -r .display_label firmware-version.json)" >> "$GITHUB_ENV"
 
       - name: Download sources
         run: |
@@ -105,12 +109,24 @@ jobs:
           fi
           python3 scripts/validate.py manifest "${manifests[0]}"
 
+      - name: Verify version embedded in the firmware rootfs
+        run: |
+          mapfile -t release_files < <(find "$OPENWRT_DIR/build_dir" -type f \
+            -path '*/root-mediatek/etc/openwrt_release')
+          if [[ ${#release_files[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one target rootfs release file'
+            exit 1
+          fi
+          python3 scripts/validate.py release "${release_files[0]}" \
+            --version-file "$OPENWRT_DIR/firmware-version.json"
+          cp "${release_files[0]}" build-logs/openwrt_release
+
       - name: Collect N60 Pro firmware
         run: |
           target_dir="$OPENWRT_DIR/bin/targets/mediatek/filogic"
           mkdir -p artifacts
           shopt -s nullglob
-          images=("$target_dir"/*netcore_n60-pro*-sysupgrade.itb)
+          images=("$target_dir"/*"$FIRMWARE_TAG"*netcore_n60-pro*-sysupgrade.itb)
           if [[ ${#images[@]} -ne 1 ]]; then
             echo '::error::Expected exactly one N60 Pro sysupgrade.itb'
             exit 1
@@ -125,6 +141,8 @@ jobs:
           cp build-logs/expanded.config artifacts/
           cp build-logs/kernel.config artifacts/
           cp build-logs/config.diff artifacts/
+          cp build-logs/openwrt_release artifacts/
+          cp "$OPENWRT_DIR/firmware-version.json" artifacts/
           cp "$OPENWRT_DIR/build-inputs.txt" artifacts/
           cat > artifacts/DEVICE-LAYOUT.txt <<'EOF'
           Netcore N60 Pro / ImmortalWrt openwrt-25.12 / Linux 6.12 / UBI-FIT
@@ -139,7 +157,7 @@ jobs:
       - name: Upload verified firmware
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: netcore-n60-pro-honk-${{ github.run_id }}-${{ github.run_attempt }}
+          name: netcore-n60-pro-honk-${{ env.FIRMWARE_TAG }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -154,6 +172,7 @@ jobs:
             build-logs/
             /workdir/openwrt/.config
             /workdir/openwrt/build-inputs.txt
+            /workdir/openwrt/firmware-version.json
             /workdir/openwrt/logs/
           include-hidden-files: true
           if-no-files-found: warn
@@ -165,6 +184,9 @@ jobs:
           {
             echo '### Netcore N60 Pro / Honk'
             echo 'Source: ImmortalWrt openwrt-25.12 / Linux 6.12 / mediatek-filogic.'
+            if [[ -n ${FIRMWARE_LABEL:-} ]]; then
+              echo "Custom version: $FIRMWARE_LABEL (Asia/Shanghai build date)."
+            fi
             echo 'Firmware is uploaded only after kernel and package manifest checks pass.'
             echo 'The UBI/FIT sysupgrade.itb requires the matching bootloader and partition layout.'
             echo 'See honk-build-logs for expanded configuration, pinned inputs and build logs.'

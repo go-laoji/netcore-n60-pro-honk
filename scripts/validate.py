@@ -2,6 +2,8 @@
 """Read-only checks for the N60 Pro Honk configuration and CI build output."""
 
 import argparse
+from datetime import date
+import json
 import re
 import sys
 from pathlib import Path
@@ -75,7 +77,22 @@ def read_config(path):
     return result
 
 
-def check_config(path, expanded):
+def read_version(path):
+    info = json.loads(path.read_text())
+    build_day = date.fromisoformat(info["build_date"])
+    require(info["timezone"] == "Asia/Shanghai", "Unexpected build timezone")
+    require(info["display_label"] == f"go-laoji-{build_day:%m/%d}",
+            "Incorrect display date label")
+    require(info["filename_tag"] == f"go-laoji-{build_day:%m-%d}",
+            "Incorrect image filename tag")
+    require(re.fullmatch(r"[A-Za-z0-9._+-]+", info["source_revision"]),
+            "Unexpected source revision format")
+    require(info["version_code"] == f"{info['source_revision']} {info['display_label']}",
+            "Custom label must be appended to the source revision")
+    return info
+
+
+def check_config(path, expanded, version_file=None):
     config = read_config(path)
     for key, expected in REQUIRED_CONFIG.items():
         require(config.get(key, "n") == expected, f"Expected {key}={expected}")
@@ -90,6 +107,13 @@ def check_config(path, expanded):
         require(config.get("CONFIG_TARGET_ARCH_PACKAGES") == '"aarch64_cortex-a53"',
                 "Unexpected target package architecture")
         require(config.get("CONFIG_LINUX_6_12") == "y", "Expected Linux 6.12 target")
+        require(version_file is not None, "Expanded config check needs --version-file")
+    if version_file is not None:
+        info = read_version(version_file)
+        require(config.get("CONFIG_VERSION_CODE") == json.dumps(info["version_code"]),
+                "Firmware version code was lost during config expansion")
+        require(config.get("CONFIG_EXTRA_IMAGE_NAME") == json.dumps(info["filename_tag"]),
+                "Image filename tag was lost during config expansion")
 
 
 def check_source(path):
@@ -139,21 +163,42 @@ def check_manifest(path):
     require(tuple(map(int, version.groups())) >= (6, 12), "Honk requires Linux >= 6.12")
 
 
+def check_release(path, version_file):
+    require(version_file is not None, "Release check needs --version-file")
+    info = read_version(version_file)
+    fields = dict(re.findall(r"^([A-Z_]+)='([^']*)'$", path.read_text(), re.M))
+    require(fields.get("DISTRIB_ID") == "ImmortalWrt", "Unexpected distribution name")
+    require(fields.get("DISTRIB_TARGET") == "mediatek/filogic", "Unexpected release target")
+    require(fields.get("DISTRIB_ARCH") == "aarch64_cortex-a53", "Unexpected release architecture")
+    require(fields.get("DISTRIB_REVISION") == info["source_revision"],
+            "Upstream source revision changed")
+    require(fields.get("DISTRIB_DESCRIPTION", "").endswith(" " + info["version_code"]),
+            "Custom version label is missing from the built firmware description")
+    require(re.fullmatch(r"25\.12(?:\.[0-9]+)?(?:-SNAPSHOT)?", fields.get("DISTRIB_RELEASE", "")),
+            "Expected upstream release number without custom date suffix")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("kind", choices=("config", "source", "kernel", "manifest"))
+    parser.add_argument("kind", choices=("config", "source", "kernel", "manifest", "release"))
     parser.add_argument("path", type=Path)
     parser.add_argument("--expanded", action="store_true",
                         help="Also check generated target architecture and kernel symbols")
+    parser.add_argument("--version-file", type=Path,
+                        help="firmware-version.json generated during source preparation")
     args = parser.parse_args()
     try:
         if args.kind == "config":
-            check_config(args.path, args.expanded)
+            check_config(args.path, args.expanded, args.version_file)
+        elif args.kind == "release":
+            require(not args.expanded, "--expanded is only valid for config checks")
+            check_release(args.path, args.version_file)
         else:
             require(not args.expanded, "--expanded is only valid for config checks")
+            require(args.version_file is None, "--version-file needs config or release")
             {"source": check_source, "kernel": check_kernel,
              "manifest": check_manifest}[args.kind](args.path)
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, KeyError, TypeError) as error:
         print(f"Validation failed: {error}", file=sys.stderr)
         return 1
     print(f"Validated {args.kind}: {args.path}")

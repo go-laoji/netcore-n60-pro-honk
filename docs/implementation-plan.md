@@ -49,5 +49,7 @@
 进度：
 
 1. [x] 创建 Issue，核对上游版本替换、TurboACC 和 miniupnpd 的实际配置。
-2. [ ] 修改 UPnP、版本生成及 Actions/验收脚本，分步提交。
-3. [ ] 更新 README，完成静态验证、隐私检查，并在 Issue 中回复结果后关闭。
+2. [x] 修改 UPnP、版本生成及 Actions/验收脚本，分步提交。
+3. [x] 更新 README，完成静态验证、隐私检查，并在 Issue 中回复结果后关闭。
+
+本次验证：ShellCheck、actionlint、Bash/sh 和 Python 语法、配置种子、`git diff --check` 均通过。18 个临时版本/manifest/UCI 场景通过，覆盖北京时间跨日、跨年、闰日、重复生成、上游版本和源地址保留、实际版本描述缺失/日期错误、文件名斜杠保护、UPnP 缺包/错误后端和 TurboACC/SFE 泄漏。受版本管理文件和 Git 文本对象隐私检查通过。未本地构建、未推送；首次 Actions 和实机 UPnP/Honk 验收仍待后续完成。

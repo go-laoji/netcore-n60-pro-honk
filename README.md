@@ -32,6 +32,18 @@
 
 默认关闭 `bridger` 和 nft flow offload 模块；首次启动的 UCI defaults 脚本关闭防火墙软件/硬件 flow offloading，使流量经过透明代理路径。旧固件配置不应直接恢复到新布局和新网络驱动上。Honk 保持上游未初始化、未启用的默认状态，不内置订阅、节点、密码或 API 密钥。
 
+### TurboACC 与 UPnP
+
+当前不集成 TurboACC。它提供的是 Flow Offload、SFE、Full Cone NAT、BBR 等功能集合，不能直接视为 Honk 代理性能增强。硬件卸载/SFE 可能绕开主机上的代理处理；软件 flow offload 与 TC/eBPF 不能一概认定冲突，但当前固件组合没有兼容性和吞吐实测，因此继续保持禁用，不替换防火墙相关依赖。参考 [TurboACC 功能与安装说明](https://github.com/chenmozhijin/turboacc/blob/luci/README_EN.md)、[Honk 的 TC/eBPF 路径说明](https://github.com/Glassyiris/honk/blob/aebc0d78d567cac1cd74ee9c56674857c5441451/README.md) 和 [Linux flowtable 机制](https://docs.kernel.org/networking/nf_flowtable.html)。
+
+UPnP 对家庭游戏主机、联机游戏、P2P 应用自动创建端口映射有帮助，作用是连接可达性，不提高带宽。本配置明确选择 `miniupnpd-nftables`、LuCI 管理页和中文翻译，新安装固件默认在 **LAN** 启用 UPnP/NAT-PMP，开启 `secure_mode`，保留上游的高端口允许规则和最后的默认拒绝规则。可在 LuCI「服务 → UPnP」查看映射或关闭服务。上级路由/运营商 CGNAT 下，单独启用本机 UPnP 无法保证公网入站可达。设置依据：[固定版本的 miniupnpd 配置](https://github.com/immortalwrt/packages/blob/2dba1dd2af3b447faf52f85c0850a6f9667cac17/net/miniupnpd/files/upnpd.config)。
+
+### 自定义版本标识
+
+Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，系统版本描述追加 `go-laoji-MM/DD`。例如 10 月 31 日构建时显示 `ImmortalWrt 25.12-SNAPSHOT <上游 revision> go-laoji-10/31`，可在 LuCI 系统概览、`ubus call system board` 或 `/etc/openwrt_release` 的 `DISTRIB_DESCRIPTION` 中查看。
+
+上游发行版本、源码 revision 和软件源地址继续保留。镜像文件名使用无斜杠的 `go-laoji-10-31`，版本代码不进入文件名；产物同时保存 `firmware-version.json` 和实际 rootfs 的 `openwrt_release`。标识生成和实际固件描述都经过 Actions 验收，日期取当次准备构建配置的时间，不固定为本文日期。
+
 ## 文件
 
 | 文件 | 用途 |
@@ -40,8 +52,9 @@
 | `feeds.conf.default` | 固定版本的 Honk、官方 packages、LuCI、routing feeds |
 | `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取固定源码、验证版本、安装 feeds、复制配置 |
+| `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
-| `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading |
+| `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
 | `.github/workflows/build-honk.yml` | 唯一的固件构建流程 |
 | `docs/implementation-plan.md` | 实施范围、验证边界与完成状态 |
 
@@ -70,7 +83,7 @@ git push -u origin feature/honk-only-build
 
 成功后，在该次运行的 **Artifacts** 下载：
 
-- `netcore-n60-pro-honk-<run_id>-<attempt>`：已通过检查的 N60 Pro 主镜像、可用的恢复镜像、manifest、镜像元数据、构建版本信息、展开配置、内核配置、输入提交记录和 `sha256sums`。默认保存 30 天。
+- `netcore-n60-pro-honk-go-laoji-MM-DD-<run_id>-<attempt>`：已通过检查的 N60 Pro 主镜像、可用的恢复镜像、manifest、镜像元数据、构建版本信息、展开配置、内核配置、版本标识记录、实际 rootfs 的版本文件、输入提交记录和 `sha256sums`。默认保存 30 天。
 - `honk-build-logs-<run_id>-<attempt>`：准备/下载/编译日志、配置和输入记录。失败时也尝试上传已产生的诊断文件，默认保存 14 天。
 
 本地没有执行配置展开、工具链构建或固件编译；编译是否成功由首次 Actions 运行验证，刷机和 Honk 实际路由行为仍需在布局匹配的设备上验收。
@@ -109,7 +122,7 @@ shellcheck -s sh files/etc/uci-defaults/99-honk-routing
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)。
 
 ## 许可与致谢
 
