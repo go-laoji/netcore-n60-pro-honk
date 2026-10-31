@@ -26,11 +26,19 @@
 - `honk`、`luci-app-honk`；Doona 静态资源和中文翻译由上游 LuCI 包提供。
 - `v2ray-geoip`、`v2ray-geosite`：Honk 路由所需的数据包，不包含 V2Ray/Xray 代理核心。
 - Honk 所需的 BTF、cgroup BPF、BPF events、网络命名空间，以及 `kmod-sched-core`、`kmod-sched-bpf`、`kmod-veth`、`kmod-nft-queue`。
-- 正常路由/防火墙/无线、中文 LuCI、UPnP、ttyd、htop、nano、SFTP 等管理功能。设备驱动依赖由官方 profile 补全。
+- 正常路由/防火墙/无线、中文 LuCI、默认 Argon 主题、argon-config、QuickStart、UPnP、ttyd、htop、nano、SFTP 等管理功能。设备驱动依赖由官方 profile 补全。
 
 不引入 small-package 聚合源，不安装 dae/daed/daede、OpenClash/Mihomo、Nikki、HomeProxy/Sing-box、PassWall、SSR Plus、VSSR、Xray、V2Ray 核心或其他代理。也不集成 AdGuardHome、MosDNS、SmartDNS。源码 feeds 中未选中的软件包不会因此进入固件。
 
 默认关闭 `bridger` 和 nft flow offload 模块；首次启动的 UCI defaults 脚本关闭防火墙软件/硬件 flow offloading，使流量经过透明代理路径。旧固件配置不应直接恢复到新布局和新网络驱动上。Honk 保持上游未初始化、未启用的默认状态，不内置订阅、节点、密码或 API 密钥。
+
+### Argon 与 QuickStart
+
+默认主题为 **Argon**，同时安装 `luci-app-argon-config` 及中文翻译。`zz-honk-ui` 在主题包默认脚本之后执行，明确将 `luci.main.mediaurlbase` 设置为 `/luci-static/argon`，因此首次启动会使用 Argon。
+
+`luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 和 argon-config 使用当前固定的官方 LuCI feed；QuickStart、其 LuCI 页面和 iStore 组件分别来自固定提交的 [nas-packages](https://github.com/linkease/nas-packages/tree/aeb8ca964e437c06c507a171d38e0c7927c2384d/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/2a71fe50f64f57b85c190d34d7ffc0244b4ca794/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/a97ace34f2da358a015b094d326bba2697697f2e)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
+
+Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态资源、QuickStart 可执行后端、LuCI controller 和默认主题脚本，防止只选中界面却遗漏运行组件。
 
 ### TurboACC 与 UPnP
 
@@ -49,12 +57,13 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | 文件 | 用途 |
 | --- | --- |
 | `build.env` | 固件源码仓库、分支说明和完整提交 |
-| `feeds.conf.default` | 固定版本的 Honk、官方 packages、LuCI、routing feeds |
+| `feeds.conf.default` | 固定版本的 Honk、官方 packages/LuCI/routing、QuickStart 和 iStore 依赖 feeds |
 | `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取固定源码、验证版本、安装 feeds、复制配置 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
 | `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
+| `files/etc/uci-defaults/zz-honk-ui` | 在主题包默认脚本后将 Argon 设为默认皮肤 |
 | `.github/workflows/build-honk.yml` | 唯一的固件构建流程 |
 | `docs/implementation-plan.md` | 实施范围、验证边界与完成状态 |
 
@@ -110,6 +119,7 @@ Honk 的 [包定义](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979
 ```sh
 bash -n scripts/prepare-source.sh
 sh -n files/etc/uci-defaults/99-honk-routing
+sh -n files/etc/uci-defaults/zz-honk-ui
 python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
 git diff --check
 ```
@@ -119,10 +129,11 @@ git diff --check
 ```sh
 shellcheck -x -P SCRIPTDIR scripts/prepare-source.sh
 shellcheck -s sh files/etc/uci-defaults/99-honk-routing
+shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)。
 
 ## 许可与致谢
 

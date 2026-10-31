@@ -67,4 +67,6 @@
 
 1. [x] 创建 Issue，核对固定 LuCI feed、quickstart 正式包及依赖。
 2. [x] 增加固定 feeds、软件包选项、默认主题和 Actions 验收，分步提交。
-3. [ ] 更新 README，完成静态与隐私检查，在 Issue 回填结果并关闭。
+3. [x] 更新 README，完成静态与隐私检查，在 Issue 回填结果并关闭。
+
+本次验证：ShellCheck、actionlint、Bash/sh/Python 语法、配置种子和 `git diff --check` 通过。16 个临时配置/manifest/UI/feed 场景通过，覆盖请求包缺失、Argon CSS/quickstart 后端/控制器/默认脚本缺失、后端不可执行、默认主题设置和七个 feeds 的完整提交固定。受版本管理文件和 Git 文本对象隐私检查通过。未本地构建或推送，实际界面和服务运行留待首次 Actions 及实机验证。
