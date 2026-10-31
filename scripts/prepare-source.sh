@@ -50,11 +50,15 @@ test -f feeds/istore/luci/luci-lib-taskd/Makefile
 test -f feeds/istore/luci/luci-lib-xterm/Makefile
 test -f feeds/istore/luci/taskd/Makefile
 ./scripts/feeds install -a
+# The fixed feed's optional WeeChat UI triggers a Kconfig self-dependency.
+# Unregister it before defconfig; this firmware does not use WeeChat.
+./scripts/feeds uninstall luci-app-weechat
 ./scripts/feeds install -f -p honk honk luci-app-honk
 ./scripts/feeds install -f -p luci luci-theme-argon luci-app-argon-config luci-compat
 ./scripts/feeds install -f -p nas quickstart
 ./scripts/feeds install -f -p nas_luci luci-app-quickstart
 ./scripts/feeds install -f -p istore luci-app-store luci-lib-taskd luci-lib-xterm taskd
+test ! -e package/feeds/luci/luci-app-weechat
 
 cp "$PROJECT_DIR/$CONFIG_FILE" .config
 python3 "$PROJECT_DIR/scripts/stamp-version.py" .

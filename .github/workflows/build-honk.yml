@@ -47,6 +47,7 @@ jobs:
           sh -n files/etc/uci-defaults/99-honk-routing
           sh -n files/etc/uci-defaults/zz-honk-ui
           python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
+          python3 -B scripts/test_ci_config.py
 
       - name: Prepare Linux build environment
         env:
@@ -73,6 +74,8 @@ jobs:
         run: |
           cd "$OPENWRT_DIR"
           make defconfig 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/defconfig.log"
+          python3 "$GITHUB_WORKSPACE/scripts/validate.py" defconfig-log \
+            "$GITHUB_WORKSPACE/build-logs/defconfig.log"
           python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded \
             --version-file firmware-version.json
           ./scripts/diffconfig.sh > "$GITHUB_WORKSPACE/build-logs/config.diff"
@@ -124,6 +127,7 @@ jobs:
           rootfs_dir=$(dirname -- "$(dirname -- "${release_files[0]}")")
           python3 scripts/validate.py ui "$rootfs_dir"
           cmp -- files/etc/uci-defaults/zz-honk-ui "$rootfs_dir/etc/uci-defaults/zz-honk-ui"
+          cmp -- files/etc/uci-defaults/99-honk-routing "$rootfs_dir/etc/uci-defaults/99-honk-routing"
 
       - name: Collect N60 Pro firmware
         run: |
@@ -177,6 +181,8 @@ jobs:
             /workdir/openwrt/.config
             /workdir/openwrt/build-inputs.txt
             /workdir/openwrt/firmware-version.json
+            /workdir/openwrt/tmp/.config-package.in
+            /workdir/openwrt/tmp/.packageinfo
             /workdir/openwrt/logs/
           include-hidden-files: true
           if-no-files-found: warn

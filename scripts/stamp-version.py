@@ -29,6 +29,7 @@ def stamp_version(source, build_time=None):
     filename_tag = f"go-laoji-{build_day:%m-%d}"
     version_code = f"{revision} {label}"
     values = {
+        "CONFIG_IMAGEOPT": "y",
         "CONFIG_VERSIONOPT": "y",
         "CONFIG_VERSION_CODE": json.dumps(version_code),
         "CONFIG_EXTRA_IMAGE_NAME": json.dumps(filename_tag),
