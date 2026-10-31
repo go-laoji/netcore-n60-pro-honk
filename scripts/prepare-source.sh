@@ -15,13 +15,13 @@ OPENWRT_DIR=${1:?Usage: prepare-source.sh /absolute/path/to/openwrt}
     echo 'The source destination must be a new absolute path.' >&2
     exit 1
 }
-[[ $FIRMWARE_COMMIT =~ ^[0-9a-f]{40}$ ]] || exit 1
+git check-ref-format "refs/heads/$FIRMWARE_BRANCH"
 
 git init "$OPENWRT_DIR"
 git -C "$OPENWRT_DIR" remote add origin "$FIRMWARE_REPOSITORY"
-git -C "$OPENWRT_DIR" fetch --depth=1 origin "$FIRMWARE_COMMIT"
+git -C "$OPENWRT_DIR" fetch --depth=1 --no-tags origin "refs/heads/$FIRMWARE_BRANCH"
 git -C "$OPENWRT_DIR" checkout --detach FETCH_HEAD
-[[ $(git -C "$OPENWRT_DIR" rev-parse HEAD) == "$FIRMWARE_COMMIT" ]]
+FIRMWARE_RESOLVED_COMMIT=$(git -C "$OPENWRT_DIR" rev-parse HEAD)
 
 cd "$OPENWRT_DIR"
 python3 "$PROJECT_DIR/scripts/validate.py" source .
@@ -64,7 +64,7 @@ chmod +x files/etc/uci-defaults/99-honk-routing files/etc/uci-defaults/zz-honk-u
 
 {
     printf 'Firmware repository: %s\nFirmware branch: %s\nFirmware commit: %s\n' \
-        "$FIRMWARE_REPOSITORY" "$FIRMWARE_BRANCH" "$FIRMWARE_COMMIT"
+        "$FIRMWARE_REPOSITORY" "$FIRMWARE_BRANCH" "$FIRMWARE_RESOLVED_COMMIT"
     printf 'Configuration repository commit: %s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
     printf '\nPinned feeds:\n'
     cat feeds.conf.default

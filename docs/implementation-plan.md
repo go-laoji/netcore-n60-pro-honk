@@ -6,7 +6,7 @@
 
 - 参考 [go-laoji/netcore-n60-pro](https://github.com/go-laoji/netcore-n60-pro) 的配置和 Actions 流程，当前仓库从空仓库独立整理。
 - 原计划使用 padavanonly 6.6；核对发现 Honk 的 `honk/files/control.sh` 要求 Linux >= 6.12，用户已确认改用满足要求的新源码。
-- 使用 ImmortalWrt `openwrt-25.12`，Linux 6.12、`mediatek/filogic`、`netcore_n60-pro`、`aarch64_cortex-a53`。源码和 Honk 均固定完整提交，避免分支更新改变首次构建输入。
+- 使用 ImmortalWrt `openwrt-25.12`，Linux 6.12、`mediatek/filogic`、`netcore_n60-pro`、`aarch64_cortex-a53`。按 Issue #5 的调整，固件源码每次构建跟随该分支最新提交，记录实际 SHA；Honk 和其他依赖 feeds 继续独立固定版本。
 - 代理仅集成 `kenzok8/openwrt-honk` 的 `honk` 和 `luci-app-honk`；Doona、中文翻译由上游 LuCI 包提供。GeoIP/GeoSite 是必要数据包，不属于额外代理服务。
 - 保留路由、无线、LuCI、UPnP、ttyd 等基本功能；移除旧仓库的其他源码分支、更新检查器、聚合代理 feed、Go 覆盖、daed 和 OpenClash 链路。
 - 新源码是 UBI/FIT 布局，旧 padavanonly 设备树使用 NMBM；新产物不能作为旧 `sysupgrade.bin` 的直接替代。提供构建配置，不操作设备或引导程序。
@@ -70,3 +70,19 @@
 3. [x] 更新 README，完成静态与隐私检查，在 Issue 回填结果并关闭。
 
 本次验证：ShellCheck、actionlint、Bash/sh/Python 语法、配置种子和 `git diff --check` 通过。16 个临时配置/manifest/UI/feed 场景通过，覆盖请求包缺失、Argon CSS/quickstart 后端/控制器/默认脚本缺失、后端不可执行、默认主题设置和七个 feeds 的完整提交固定。受版本管理文件和 Git 文本对象隐私检查通过。未本地构建或推送，实际界面和服务运行留待首次 Actions 及实机验证。
+
+## 源码跟随分支（Issue #5）
+
+跟踪：[Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)。
+
+- 删除 `FIRMWARE_COMMIT`，每次 Actions 运行时拉取 `openwrt-25.12` 分支最新提交；显式使用 `refs/heads/`，保留实际构建 SHA 记录和现有验收。
+- 本次只调整固件源码获取策略。feeds 版本独立固定；上游更新后通过下次推送构建或手动 Actions 获取，不增加定时构建。
+- 本地以临时 Git 仓库验证分支前进后能拉到新提交、同名 tag 不干扰、输入记录是实际 SHA。只验证 Git 拉取逻辑，不运行 OpenWrt 构建命令。
+
+进度：
+
+1. [x] 核对现有固定提交逻辑，创建 Issue。
+2. [x] 修改源码拉取、当前文档和 Actions 描述，完成验证并提交。
+3. [x] 在 Issue 中回复结果并关闭。
+
+本次验证：5 个临时 Git 仓库场景通过，验证分支头初次获取、上游分支前进后获取新提交、同名 tag 和无关分支不干扰、无效/不存在分支失败退出，以及实际 SHA 记录。Bash 语法、ShellCheck、actionlint、配置种子、`git diff --check` 和隐私检查通过。未下载固件源码或依赖，未执行 OpenWrt 配置展开、固件编译或推送。

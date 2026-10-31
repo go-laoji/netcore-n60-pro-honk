@@ -124,7 +124,7 @@ def check_source(path):
     version = re.search(r"^KERNEL_PATCHVER\s*:?=\s*(\d+)\.(\d+)\s*$", target, re.M)
     require(version is not None, "Cannot determine target kernel version")
     require(tuple(map(int, version.groups())) == (6, 12),
-            "This configuration requires the pinned Linux 6.12 source")
+            "Expected Linux 6.12 on the openwrt-25.12 branch")
     image = (path / "target/linux/mediatek/image/filogic.mk").read_text()
     require("define Device/netcore_n60-pro\n" in image, "N60 Pro profile is missing")
     dts = (path / "target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts").read_text()

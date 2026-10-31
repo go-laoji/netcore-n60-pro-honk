@@ -66,7 +66,7 @@ jobs:
           sudo chown "$(id -u):$(id -g)" /workdir
           df -hT /workdir
 
-      - name: Prepare pinned firmware source and feeds
+      - name: Prepare latest branch source and pinned feeds
         run: bash scripts/prepare-source.sh "$OPENWRT_DIR" 2>&1 | tee build-logs/prepare.log
 
       - name: Expand and verify build configuration
@@ -193,6 +193,6 @@ jobs:
             fi
             echo 'Firmware is uploaded only after kernel and package manifest checks pass.'
             echo 'The UBI/FIT sysupgrade.itb requires the matching bootloader and partition layout.'
-            echo 'See honk-build-logs for expanded configuration, pinned inputs and build logs.'
+            echo 'See honk-build-logs for the actual firmware commit, pinned feeds, configuration and logs.'
           } >> "$GITHUB_STEP_SUMMARY"
           df -hT /workdir || true

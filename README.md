@@ -8,7 +8,7 @@
 
 | 项目 | 本仓库配置 |
 | --- | --- |
-| 源码 | `immortalwrt/immortalwrt`，`openwrt-25.12` 分支的固定提交 |
+| 源码 | `immortalwrt/immortalwrt`，每次构建使用 `openwrt-25.12` 分支最新提交 |
 | 内核 | Linux 6.12 |
 | Target / Subtarget | `mediatek / filogic` |
 | 设备 profile | `netcore_n60-pro`，不包含 N60 或 512M 闪存硬改版 |
@@ -19,7 +19,7 @@
 
 **镜像布局与旧 padavanonly 6.6 固件不同。** 旧源码的设备树启用了 NMBM，产物为 `sysupgrade.bin`；此处上游设备树使用原生 NAND 上的 UBI `fit` 卷和匹配的 U-Boot。虽然机型和芯片相同，两个镜像不能仅凭文件名互换。刷入前必须核对实际设备的 bootloader、NMBM 状态及分区布局，并按匹配的上游迁移路径处理。本仓库不提供自动刷写或引导迁移脚本，也不将 bootloader 二进制放入固件下载包。
 
-设备支持依据：[固定提交的 N60 Pro profile](https://github.com/immortalwrt/immortalwrt/blob/3682a14dd5ec6382af65d7e72b5b415b5f3173a8/target/linux/mediatek/image/filogic.mk)、[N60 Pro 设备树](https://github.com/immortalwrt/immortalwrt/blob/3682a14dd5ec6382af65d7e72b5b415b5f3173a8/target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts)、[内核版本](https://github.com/immortalwrt/immortalwrt/blob/3682a14dd5ec6382af65d7e72b5b415b5f3173a8/target/linux/mediatek/Makefile)。当前尚未进行实机验证。
+设备支持依据：[分支上的 N60 Pro profile](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/target/linux/mediatek/image/filogic.mk)、[N60 Pro 设备树](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/target/linux/mediatek/dts/mt7986a-netcore-n60-pro.dts)、[内核版本](https://github.com/immortalwrt/immortalwrt/blob/openwrt-25.12/target/linux/mediatek/Makefile)。每次构建都会重新验证源码和目标；当前尚未进行实机验证。
 
 ## 安装内容
 
@@ -56,10 +56,10 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 
 | 文件 | 用途 |
 | --- | --- |
-| `build.env` | 固件源码仓库、分支说明和完整提交 |
+| `build.env` | 固件源码仓库和需要跟随的分支，不固定提交 |
 | `feeds.conf.default` | 固定版本的 Honk、官方 packages/LuCI/routing、QuickStart 和 iStore 依赖 feeds |
 | `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
-| `scripts/prepare-source.sh` | Actions Linux runner 中拉取固定源码、验证版本、安装 feeds、复制配置 |
+| `scripts/prepare-source.sh` | Actions Linux runner 中拉取分支最新源码、记录实际 SHA、验证版本、安装 feeds、复制配置 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
 | `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
@@ -86,7 +86,7 @@ git push -u origin feature/honk-only-build
 
 ## 构建流程和产物
 
-流程：静态检查 → 安装 Linux 构建依赖 → 拉取固定源码/feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件。
+流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件。
 
 配置检查会确认只有 N60 Pro、Honk 和必需依赖均被选中、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理或 flow offload。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue 和网络命名空间。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
 
@@ -110,7 +110,9 @@ git push -u origin feature/honk-only-build
 
 ## 更新版本与本地检查
 
-`build.env` 和 `feeds.conf.default` 中均使用完整提交，不会因上游分支移动而自动升级。更新时一并复核内核、设备 profile、镜像布局、包依赖、Honk 核心/Doona 归档及其校验值，再推送触发新构建。
+`build.env` 只配置固件源码仓库及 `FIRMWARE_BRANCH=openwrt-25.12`，不配置固定 SHA。每次 Actions 运行时都会获取该分支当时的最新提交，并将实际 SHA 写入 `build-inputs.txt`，随固件和日志保存。上游有更新后，手动运行 Actions 或按上文推送构建配置即可使用新代码；上游提交本身不会自动触发本仓库构建。
+
+`feeds.conf.default` 中的 Honk、官方软件包/LuCI/routing 和 QuickStart 依赖仍独立固定完整提交。更新依赖版本时复核内核、设备 profile、镜像布局、包依赖、Honk 核心/Doona 归档及校验值，再触发新构建。
 
 Honk 的 [包定义](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979a2b2c659010a22cd0281482947/honk/Makefile) 会下载上游固定版本、带 SHA256 校验的 aarch64 核心；[LuCI 包](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979a2b2c659010a22cd0281482947/luci-app-honk/Makefile) 同样下载固定 Doona 归档。固件构建无需另行维护 Rust/Zig/Node 编译链，也不会在路由器启动后下载核心。
 
@@ -133,7 +135,7 @@ shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)。
 
 ## 许可与致谢
 
