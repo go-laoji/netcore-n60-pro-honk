@@ -150,3 +150,5 @@
 本次验证：新增 9 个 OpenClash 聚焦测试与原有 11 个测试全部通过，覆盖仅允许精确的备用应用、继续拒绝其他代理和核心、要求 dnsmasq-full/nftset 并排除普通 dnsmasq、管理组件及下载脚本缺失/不可执行、出厂配置误启用、闪存/内存目录中的预装核心或归档，以及实际执行默认脚本得到关闭状态、ARM64 和小闪存设置。使用固定 feed 的真实 OpenClash 配置进行 rootfs 配置解析检查通过。Bash/sh、Python 语法、ShellCheck、actionlint、配置种子、隐私路径和 `git diff --check` 均通过。
 
 本地未执行 OpenWrt 配置展开、源码/内核下载或固件编译；固定 feed 的软件包定义、配置和运行脚本仅作只读检查。功能分支 `feature/openclash-backup` 未自动 finish；完整编译和实机验证由后续 Actions 与设备验收完成。
+
+远程验证：[run 41177219836](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41177219836)，功能提交 `2fc88b7`、说明提交 `e78bda0`。分支已推送，Actions 的配置输入校验和全部回归测试已通过；云端环境准备与后续构建仍在进行，尚未声称新固件编译或实际代理切换成功。
