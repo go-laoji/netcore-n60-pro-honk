@@ -7,8 +7,8 @@
 - 参考 [go-laoji/netcore-n60-pro](https://github.com/go-laoji/netcore-n60-pro) 的配置和 Actions 流程，当前仓库从空仓库独立整理。
 - 原计划使用 padavanonly 6.6；核对发现 Honk 的 `honk/files/control.sh` 要求 Linux >= 6.12，用户已确认改用满足要求的新源码。
 - 使用 ImmortalWrt `openwrt-25.12`，Linux 6.12、`mediatek/filogic`、`netcore_n60-pro`、`aarch64_cortex-a53`。按 Issue #5 的调整，固件源码每次构建跟随该分支最新提交，记录实际 SHA；Honk 和其他依赖 feeds 继续独立固定版本。
-- 代理仅集成 `kenzok8/openwrt-honk` 的 `honk` 和 `luci-app-honk`；Doona、中文翻译由上游 LuCI 包提供。GeoIP/GeoSite 是必要数据包，不属于额外代理服务。
-- 保留路由、无线、LuCI、UPnP、ttyd 等基本功能；移除旧仓库的其他源码分支、更新检查器、聚合代理 feed、Go 覆盖、daed 和 OpenClash 链路。
+- 主代理集成 `kenzok8/openwrt-honk` 的 `honk` 和 `luci-app-honk`；Doona、中文翻译由上游 LuCI 包提供。按 Issue #8 增加默认关闭的 OpenClash 备用管理组件，其 Mihomo 内核由运行时下载。GeoIP/GeoSite 是必要数据包，不属于额外代理服务。
+- 保留路由、无线、LuCI、UPnP、ttyd 等基本功能；移除旧仓库的其他源码分支、更新检查器、聚合代理 feed、Go 覆盖和 daed 链路。OpenClash 使用现有固定 LuCI feed，不恢复聚合 feed 或核心预装流程。
 - 新源码是 UBI/FIT 布局，旧 padavanonly 设备树使用 NMBM；新产物不能作为旧 `sysupgrade.bin` 的直接替代。提供构建配置，不操作设备或引导程序。
 - 本地只进行静态校验和临时目录下的脚本检查；`make defconfig`、下载、编译、固件验收只在 GitHub Actions 运行。
 
@@ -128,3 +128,27 @@
 本次验证：5 个发布回归测试和原有 6 个 CI 配置测试全部通过，覆盖北京时间跨日、保留固件内编译日期、发布时间命名、产物被修改/缺失时拒绝发布、草稿完整上传后公开及上传失败不公开。配置种子、Python 语法、actionlint（含 ShellCheck）、受版本管理文件的隐私路径检查和 `git diff --check` 通过。
 
 远程验证：[发布 run 41174550410](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41174550410)，提交 `d47c1e4`，`build` 跳过、`publish` 成功。来源为成功构建 `41167469654` 的 artifact `13032370350`，没有重新编译。公开的 [Release](https://github.com/go-laoji/netcore-n60-pro-honk/releases/tag/firmware-immortalwrt-25-12-snapshot-r0-3682a14-go-laoji-10-31-20261031-1356) 名称为 `ImmortalWrt 25.12-SNAPSHOT r0-3682a14 go-laoji-10/31 13:56`，于北京时间 2026-10-31 13:56 发布，14 个资产均为已上传状态，tag 指向原固件构建提交 `0920cc5fe3943efc2b1eb06896e7c9f4de66e7ff`。代码位于 `feature/firmware-release`，未自动 finish。
+
+## OpenClash 备用代理（Issue #8）
+
+跟踪：[Issue #8](https://github.com/go-laoji/netcore-n60-pro-honk/issues/8)。分支：`feature/openclash-backup`。
+
+- 参考 [原仓库](https://github.com/go-laoji/netcore-n60-pro) 的 `padavanonly-immortalwrt-mt798x-6.6.config` 中选择 `luci-app-openclash`、排除 `mihomo` 的方式，仅增加备用管理组件。
+- 当前固定 LuCI feed 已含 OpenClash `0.48.002`；其 [Makefile](https://github.com/immortalwrt/luci/blob/c84adb975e207ae8b14982191838ec6218d632cd/applications/luci-app-openclash/Makefile) 的 `Build/Compile` 为空，不构建代理内核，不需要新增 feed。Honk 源码、Linux 6.12 和现有 Release 流程保持当前方案。
+- 选择 OpenClash 所需的 `dnsmasq-full`、Ruby/YAML、bash、unzip、TUN、inet-diag 和 nftables TProxy；显式关闭普通 `dnsmasq`，启用 `dnsmasq_full_nftset`，沿用 firewall4 后端。
+- 最后执行的 UCI defaults 明确设置 `openclash.config.enable=0`、ARM64 下载架构。服务保持上游注册方式，以便用户在 LuCI 启用后可正常开机启动；未启用时由上游启动检查直接退出，不自动下载内核。
+- 不选择或预下载 Clash/Mihomo 代理内核，保留上游的运行时下载机制。保留工作区默认脚本中已有的 `small_flash_memory=1` 设置，运行时将内核和相关数据放在 `/tmp/etc/openclash`；重启后需重新下载，不宣称离线冷启动可用。
+- 配置和 manifest 验收只精确放行 `luci-app-openclash`；继续拒绝其他代理核心和应用。rootfs 验收增加管理组件、运行时下载脚本、默认关闭状态及未预装内核的检查。
+- 文档说明先停止当前代理，再启用另一代理，不实现自动故障切换。本地仅静态及临时样例验证，不执行 OpenWrt 配置展开或固件编译，不自动 finish。
+
+进度：
+
+1. [x] 创建 Issue、功能分支，核对参考配置与当前固定 feed 的实际包定义和运行时下载行为。
+2. [x] 增加备用应用及依赖、默认设置和构建验收，完成聚焦测试后提交。
+3. [x] 更新说明，完成静态与隐私检查，回填并关闭 Issue。
+
+本次验证：新增 9 个 OpenClash 聚焦测试与原有 11 个测试全部通过，覆盖仅允许精确的备用应用、继续拒绝其他代理和核心、要求 dnsmasq-full/nftset 并排除普通 dnsmasq、管理组件及下载脚本缺失/不可执行、出厂配置误启用、闪存/内存目录中的预装核心或归档，以及实际执行默认脚本得到关闭状态、ARM64 和小闪存设置。使用固定 feed 的真实 OpenClash 配置进行 rootfs 配置解析检查通过。Bash/sh、Python 语法、ShellCheck、actionlint、配置种子、隐私路径和 `git diff --check` 均通过。
+
+本地未执行 OpenWrt 配置展开、源码/内核下载或固件编译；固定 feed 的软件包定义、配置和运行脚本仅作只读检查。功能分支 `feature/openclash-backup` 未自动 finish；完整编译和实机验证由后续 Actions 与设备验收完成。
+
+远程验证：[run 41177219836](https://github.com/go-laoji/netcore-n60-pro-honk/actions/runs/41177219836)，功能提交 `2fc88b7`、说明提交 `e78bda0`。分支已推送，Actions 的配置输入校验和全部回归测试已通过；云端环境准备与后续构建仍在进行，尚未声称新固件编译或实际代理切换成功。

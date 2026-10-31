@@ -1,6 +1,6 @@
 # Netcore N60 Pro · ImmortalWrt + Honk
 
-只为 **Netcore N60 Pro** 生成固件的配置仓库。代理服务只安装 [kenzok8/openwrt-honk](https://github.com/kenzok8/openwrt-honk)：Honk 核心、LuCI 管理页和 Doona 界面。固件编译在 GitHub Actions 的 Linux runner 上完成。
+只为 **Netcore N60 Pro** 生成固件的配置仓库。主代理为 [kenzok8/openwrt-honk](https://github.com/kenzok8/openwrt-honk)：Honk 核心、LuCI 管理页和 Doona 界面；另安装默认关闭的 OpenClash 管理组件作为备用，其代理内核在路由器运行时下载。固件编译在 GitHub Actions 的 Linux runner 上完成。
 
 本仓库参考 [go-laoji/netcore-n60-pro](https://github.com/go-laoji/netcore-n60-pro) 项目的配置和 Actions 流程。原项目的 `padavanonly-immortalwrt-mt798x-6.6` 使用 Linux 6.6，而当前 Honk 的启动检查要求 **Linux >= 6.12**，因此经确认改用 **ImmortalWrt `openwrt-25.12` / Linux 6.12**。未修改 Honk 的内核版本检查。
 
@@ -24,11 +24,12 @@
 ## 安装内容
 
 - `honk`、`luci-app-honk`；Doona 静态资源和中文翻译由上游 LuCI 包提供。
+- `luci-app-openclash`：备用管理界面及运行脚本，不预装 Clash/Mihomo 代理内核。使用当前固定 LuCI feed 的 `0.48.002`，中文翻译随应用提供。
 - `v2ray-geoip`、`v2ray-geosite`：Honk 路由所需的数据包，不包含 V2Ray/Xray 代理核心。
 - Honk 所需的 BTF、cgroup BPF、BPF events、网络命名空间，以及 `kmod-sched-core`、`kmod-sched-bpf`、`kmod-veth`、`kmod-nft-queue`。
 - 正常路由/防火墙/无线、中文 LuCI、默认 Argon 主题、argon-config、QuickStart、UPnP、ttyd、htop、nano、SFTP 等管理功能。设备驱动依赖由官方 profile 补全。
 
-不引入 small-package 聚合源，不安装 dae/daed/daede、OpenClash/Mihomo、Nikki、HomeProxy/Sing-box、PassWall、SSR Plus、VSSR、Xray、V2Ray 核心或其他代理。也不集成 AdGuardHome、MosDNS、SmartDNS。源码 feeds 中未选中的软件包不会因此进入固件。
+不引入 small-package 聚合源，不安装 dae/daed/daede、Clash/Mihomo 内核、Nikki、HomeProxy/Sing-box、PassWall、SSR Plus、VSSR、Xray、V2Ray 核心或其他代理。OpenClash 管理组件是明确允许的备用应用。也不集成 AdGuardHome、MosDNS、SmartDNS。源码 feeds 中未选中的软件包不会因此进入固件。
 
 默认关闭 `bridger`，首次启动的 UCI defaults 脚本关闭防火墙软件/硬件 flow offloading，使流量经过透明代理路径。firewall4 强制依赖 `kmod-nft-offload`，因此保留该内核模块；模块安装与流量卸载功能开启是两回事，运行开关仍设为 `0`。旧固件配置不应直接恢复到新布局和新网络驱动上。Honk 保持上游未初始化、未启用的默认状态，不内置订阅、节点、密码或 API 密钥。
 
@@ -39,6 +40,22 @@
 `luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 和 argon-config 使用当前固定的官方 LuCI feed；QuickStart、其 LuCI 页面和 iStore 组件分别来自固定提交的 [nas-packages](https://github.com/linkease/nas-packages/tree/aeb8ca964e437c06c507a171d38e0c7927c2384d/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/2a71fe50f64f57b85c190d34d7ffc0244b4ca794/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/a97ace34f2da358a015b094d326bba2697697f2e)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
 
 Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态资源、QuickStart 可执行后端、LuCI controller 和默认主题脚本，防止只选中界面却遗漏运行组件。
+
+### OpenClash 备用代理
+
+参考原仓库只选 `luci-app-openclash`、排除 `mihomo` 软件包的方式。使用 [当前固定的 ImmortalWrt LuCI 包](https://github.com/immortalwrt/luci/blob/c84adb975e207ae8b14982191838ec6218d632cd/applications/luci-app-openclash/Makefile)，不新增 feed。该包的 `Build/Compile` 为空，构建阶段只安装管理组件和必要数据，不编译或预下载 OpenClash/Mihomo 内核；Honk 核心仍按现有方式随固件安装。
+
+按包定义补齐 `dnsmasq-full`、Ruby/YAML、bash、unzip、`kmod-inet-diag`、`kmod-nft-tproxy` 和 `kmod-tun`。普通 `dnsmasq` 被关闭，启用 `dnsmasq_full_nftset`，与当前 firewall4/nftables 后端配套。
+
+`zz-openclash-backup` 在上游 `luci-openclash` 默认脚本之后执行，设置 `enable=0`、下载架构 `linux-arm64` 和 `small_flash_memory=1`。首次启动保持备用代理关闭；上游服务启动检查在未启用时直接退出，不下载内核、不接管流量。使用小闪存模式时，代理内核和相关数据位于 `/tmp/etc/openclash`，**重启后需要重新下载**；它们不进入只读固件镜像。需要保留已下载内核时，可在 OpenClash 页面关闭小闪存模式，并确认设备可写空间足够。
+
+备用代理的使用顺序：
+
+1. 在 **服务 → OpenClash** 中导入自己的配置或订阅，使用内核下载/更新功能下载 **Meta/Mihomo、`linux-arm64`** 内核。未安装内核时，上游启动脚本也会在用户启用服务后尝试下载；首次下载或重启后的下载需要网络可达。
+2. 切换前，先在 Honk 页面停止并关闭 Honk，再在 OpenClash 页面启用备用代理，检查 DNS、直连与代理路由。
+3. 切回 Honk 时，先在 OpenClash 页面停止并关闭 OpenClash，再启用 Honk。两套透明代理按此顺序手动切换，不同时启用。
+
+构建验收会确认管理页、可执行启动/下载脚本和默认关闭配置齐全，并拒绝固件中出现预装核心或核心压缩包。未实现自动故障切换；实际运行与切换效果仍需实机验证。
 
 ### TurboACC 与 UPnP
 
@@ -61,12 +78,14 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取分支最新源码、记录实际 SHA、验证版本、安装 feeds、复制配置 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
-| `scripts/validate.py` | 只读检查配置、设备源码、目标内核配置及固件 manifest |
+| `scripts/validate.py` | 只读检查配置、设备源码、目标内核、manifest 及实际 rootfs；确认 OpenClash 未预装核心 |
 | `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
 | `scripts/publish_release.py` | 校验已有产物，以固件实际版本和发布时刻创建 Release |
 | `scripts/test_release.py` | 回归验证发布时间、资产校验及草稿上传后发布 |
+| `scripts/test_openclash.py` | 验证备用应用放行范围、默认关闭及未预装内核 |
 | `files/etc/uci-defaults/99-honk-routing` | 首次启动关闭防火墙 flow offloading，并配置 LAN UPnP 安全模式 |
 | `files/etc/uci-defaults/zz-honk-ui` | 在主题包默认脚本后将 Argon 设为默认皮肤 |
+| `files/etc/uci-defaults/zz-openclash-backup` | 默认关闭 OpenClash，设置 ARM64 内核及运行时内存模式 |
 | `.github/workflows/build-honk.yml` | 固件构建、验收和 Release 发布流程 |
 | `docs/implementation-plan.md` | 实施范围、验证边界与完成状态 |
 
@@ -91,7 +110,7 @@ git push -u origin develop
 
 流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件 artifact → 下载并校验 SHA256 和固件版本 → 发布 Release。
 
-配置检查会确认只有 N60 Pro、Honk 和必需依赖均被选中、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue 和网络命名空间。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
+配置检查会确认只有 N60 Pro 被选中，Honk、OpenClash 管理组件及必需依赖齐全、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、预装 Clash/Mihomo 核心、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue、网络命名空间，以及备用代理需要的 TProxy、TUN 和 inet-diag。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
 
 配置展开前会注销未使用的 `luci-app-weechat`，避开当前固定 feed 在 Kconfig 中触发的自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
 
@@ -135,9 +154,11 @@ Honk 的 [包定义](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979
 bash -n scripts/prepare-source.sh
 sh -n files/etc/uci-defaults/99-honk-routing
 sh -n files/etc/uci-defaults/zz-honk-ui
+sh -n files/etc/uci-defaults/zz-openclash-backup
 python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
 python3 -B scripts/test_ci_config.py
 python3 -B scripts/test_release.py
+python3 -B scripts/test_openclash.py
 git diff --check
 ```
 
@@ -147,10 +168,11 @@ git diff --check
 shellcheck -x -P SCRIPTDIR scripts/prepare-source.sh
 shellcheck -s sh files/etc/uci-defaults/99-honk-routing
 shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
+shellcheck -s sh files/etc/uci-defaults/zz-openclash-backup
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)、[Release 发布 Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)、[Release 发布 Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)、[OpenClash 备用代理 Issue #8](https://github.com/go-laoji/netcore-n60-pro-honk/issues/8)。
 
 ## 许可与致谢
 
