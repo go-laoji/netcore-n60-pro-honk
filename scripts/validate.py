@@ -14,7 +14,13 @@ REQUIRED_PACKAGES = (
     "usign", "coreutils-stat", "rpcd", "cgi-io", "firewall4", "nftables-json",
     "kmod-sched-core", "kmod-sched-bpf", "kmod-veth", "kmod-nft-queue",
     "kmod-mt7915e", "kmod-mt7986-firmware", "mt7986-wo-firmware", "kmod-usb3",
-    "wpad-openssl", "luci", "luci-base",
+    "wpad-openssl", "luci", "luci-base", "luci-app-upnp",
+    "luci-i18n-upnp-zh-cn", "miniupnpd-nftables",
+)
+EXCLUDED_PACKAGES = (
+    "bridger", "kmod-nft-offload", "luci-app-turboacc", "luci-app-turboacc-mtk",
+    "kmod-shortcut-fe", "kmod-shortcut-fe-cm", "kmod-shortcut-fe-drv",
+    "kmod-fast-classifier", "miniupnpd-iptables",
 )
 REQUIRED_CONFIG = {
     "CONFIG_TARGET_mediatek": "y",
@@ -33,8 +39,9 @@ REQUIRED_CONFIG = {
     "CONFIG_KERNEL_XDP_SOCKETS": "y",
     "CONFIG_TARGET_MULTI_PROFILE": "n",
     "CONFIG_TARGET_ALL_PROFILES": "n",
-    "CONFIG_PACKAGE_bridger": "n",
-    "CONFIG_PACKAGE_kmod-nft-offload": "n",
+    "CONFIG_VERSIONOPT": "y",
+    "CONFIG_VERSION_CODE_FILENAMES": "n",
+    **{f"CONFIG_PACKAGE_{name}": "n" for name in EXCLUDED_PACKAGES},
     **{f"CONFIG_PACKAGE_{name}": "y" for name in REQUIRED_PACKAGES},
 }
 # GeoIP/GeoSite are data, so v2ray-geoip and v2ray-geosite remain allowed.
@@ -125,8 +132,8 @@ def check_manifest(path):
         require(present, f"Firmware is missing package: {name}")
     for name in packages:
         require(not OTHER_PROXY.match(name), f"Firmware contains another proxy: {name}")
-    for name in ("bridger", "kmod-nft-offload"):
-        require(name not in packages, f"Firmware contains a bypass accelerator: {name}")
+    for name in EXCLUDED_PACKAGES:
+        require(name not in packages, f"Firmware contains an excluded package: {name}")
     version = re.match(r"(\d+)\.(\d+)", packages.get("kernel", ""))
     require(version is not None, "Firmware kernel version is missing")
     require(tuple(map(int, version.groups())) >= (6, 12), "Honk requires Linux >= 6.12")

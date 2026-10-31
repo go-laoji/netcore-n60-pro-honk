@@ -35,3 +35,19 @@
 - 读取固定提交 `3682a14dd5ec6382af65d7e72b5b415b5f3173a8` 的 MediaTek Makefile、N60 Pro profile 和设备树，在临时目录执行源码只读检查通过。
 - 核实 Honk 固定提交 `e1a68ffcced979a2b2c659010a22cd0281482947` 的核心和 Doona 归档均出现在其 `source-41012758310` Release 中。下载与散列核验留给 Actions。
 - 本地未执行 `make defconfig`、`make download`、工具链/固件编译，也未触发远程 Actions。首次 CI 编译及实机验证尚待后续完成。
+
+## 家庭网络和构建标识调整（Issue #3）
+
+跟踪：[Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)。
+
+- TurboACC 的流量卸载/SFE 主要优化转发路径，不能视为 Honk 代理加速；硬件卸载可能绕过主机处理，当前组合没有兼容性和吞吐实测。保持不引入 TurboACC、SFE 或硬件卸载，不替换防火墙依赖。
+- 明确选择 `miniupnpd-nftables`、UPnP LuCI 和中文包；新安装固件默认在 LAN 开启 UPnP/NAT-PMP，启用安全模式并保留上游高端口允许规则和默认拒绝规则。UPnP 用于家庭游戏/P2P 自动映射，不提高带宽，也不能消除运营商 CGNAT。
+- Actions 配置展开前，以 `Asia/Shanghai` 的日期生成显示标识 `go-laoji-MM/DD`，追加到上游 revision；保持上游版本号和软件源地址。镜像文件名使用 `go-laoji-MM-DD`，禁止带斜杠的 revision 进入文件名。
+- 在展开配置和实际 rootfs 版本文件中检查标识，并将版本记录随固件和日志上传。
+- 本地只用临时样例验证日期边界、重复执行、配置保留、错误标识和 UPnP 设置，不执行 OpenWrt 配置展开或固件编译。
+
+进度：
+
+1. [x] 创建 Issue，核对上游版本替换、TurboACC 和 miniupnpd 的实际配置。
+2. [ ] 修改 UPnP、版本生成及 Actions/验收脚本，分步提交。
+3. [ ] 更新 README，完成静态验证、隐私检查，并在 Issue 中回复结果后关闭。
