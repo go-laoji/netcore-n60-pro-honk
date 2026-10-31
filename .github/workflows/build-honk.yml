@@ -55,9 +55,11 @@ jobs:
           bash -n scripts/prepare-source.sh
           sh -n files/etc/uci-defaults/99-honk-routing
           sh -n files/etc/uci-defaults/zz-honk-ui
+          sh -n files/etc/uci-defaults/zz-openclash-backup
           python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
           python3 -B scripts/test_ci_config.py
           python3 -B scripts/test_release.py
+          python3 -B scripts/test_openclash.py
 
       - name: Prepare Linux build environment
         env:
@@ -138,6 +140,7 @@ jobs:
           python3 scripts/validate.py ui "$rootfs_dir"
           cmp -- files/etc/uci-defaults/zz-honk-ui "$rootfs_dir/etc/uci-defaults/zz-honk-ui"
           cmp -- files/etc/uci-defaults/99-honk-routing "$rootfs_dir/etc/uci-defaults/99-honk-routing"
+          cmp -- files/etc/uci-defaults/zz-openclash-backup "$rootfs_dir/etc/uci-defaults/zz-openclash-backup"
 
       - name: Collect N60 Pro firmware
         run: |
@@ -168,6 +171,7 @@ jobs:
           The old padavanonly 6.6 NMBM sysupgrade.bin layout is different.
           Review README.md and your actual bootloader/partition layout before flashing.
           Honk is installed with upstream defaults; initialize it in LuCI after boot.
+          OpenClash is a disabled backup UI; download its ARM64 core at runtime before use.
           EOF
           cd artifacts
           sha256sum -- * > sha256sums

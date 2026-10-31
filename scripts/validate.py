@@ -22,11 +22,13 @@ REQUIRED_PACKAGES = (
     "luci-app-quickstart", "luci-i18n-quickstart-zh-cn", "quickstart", "luci-compat",
     "luci-app-store", "luci-lib-taskd", "luci-lib-xterm", "taskd", "tar", "xz-utils", "libuci-lua",
     "kmod-nft-offload",
+    "luci-app-openclash", "dnsmasq-full", "bash", "ruby", "ruby-yaml", "unzip",
+    "kmod-inet-diag", "kmod-nft-tproxy", "kmod-tun",
 )
 EXCLUDED_PACKAGES = (
     "bridger", "luci-app-turboacc", "luci-app-turboacc-mtk", "luci-app-weechat",
     "kmod-shortcut-fe", "kmod-shortcut-fe-cm", "kmod-shortcut-fe-drv",
-    "kmod-fast-classifier", "miniupnpd-iptables",
+    "kmod-fast-classifier", "miniupnpd-iptables", "dnsmasq",
 )
 REQUIRED_CONFIG = {
     "CONFIG_TARGET_mediatek": "y",
@@ -48,9 +50,12 @@ REQUIRED_CONFIG = {
     "CONFIG_IMAGEOPT": "y",
     "CONFIG_VERSIONOPT": "y",
     "CONFIG_VERSION_CODE_FILENAMES": "n",
+    "CONFIG_PACKAGE_dnsmasq_full_nftset": "y",
     **{f"CONFIG_PACKAGE_{name}": "n" for name in EXCLUDED_PACKAGES},
     **{f"CONFIG_PACKAGE_{name}": "y" for name in REQUIRED_PACKAGES},
 }
+# Only this exact OpenClash package is allowed as a backup; its core is excluded.
+ALLOWED_PROXY_PACKAGES = {"honk", "luci-app-honk", "luci-app-openclash"}
 # GeoIP/GeoSite are data, so v2ray-geoip and v2ray-geosite remain allowed.
 OTHER_PROXY = re.compile(
     r"^(?:(?:luci-app|luci-i18n)-)?(?:"
@@ -105,7 +110,8 @@ def check_proxy_packages(config, package_names=None):
             # luci-app-passwall_INCLUDE_Haproxy, even when the app is disabled.
             if package_names is not None and name not in package_names:
                 continue
-            require(not OTHER_PROXY.match(name), f"Unexpected proxy package: {name}={value}")
+            require(name in ALLOWED_PROXY_PACKAGES or not OTHER_PROXY.match(name),
+                    f"Unexpected proxy package: {name}={value}")
 
 
 def check_config(path, expanded, version_file=None, package_info=None):
@@ -153,7 +159,8 @@ def check_kernel(path):
         "BPF", "BPF_SYSCALL", "BPF_JIT", "DEBUG_INFO_BTF", "CGROUP_BPF",
         "BPF_EVENTS", "NET_NS",
     )
-    modules = ("NET_SCH_INGRESS", "NET_CLS_BPF", "VETH", "NFT_QUEUE")
+    modules = ("NET_SCH_INGRESS", "NET_CLS_BPF", "VETH", "NFT_QUEUE",
+               "INET_DIAG", "NFT_TPROXY", "TUN")
     for name in built_in:
         require(config.get(f"CONFIG_{name}") == "y", f"Kernel requires CONFIG_{name}=y")
     for name in modules:
@@ -173,7 +180,8 @@ def check_manifest(path):
             present = present or any(re.fullmatch(r"libubox\d+", pkg) for pkg in packages)
         require(present, f"Firmware is missing package: {name}")
     for name in packages:
-        require(not OTHER_PROXY.match(name), f"Firmware contains another proxy: {name}")
+        require(name in ALLOWED_PROXY_PACKAGES or not OTHER_PROXY.match(name),
+                f"Firmware contains another proxy: {name}")
     for name in EXCLUDED_PACKAGES:
         require(name not in packages, f"Firmware contains an excluded package: {name}")
     version = re.match(r"(\d+)\.(\d+)", packages.get("kernel", ""))
@@ -206,6 +214,33 @@ def check_ui(path):
             "Quickstart LuCI controller is missing")
     require((path / "etc/uci-defaults/zz-honk-ui").is_file(),
             "Default Argon theme setup is missing")
+    check_openclash(path)
+
+
+def check_openclash(path):
+    for name in ("usr/lib/lua/luci/controller/openclash.lua",
+                 "usr/lib/lua/luci/model/cbi/openclash/settings.lua"):
+        require((path / name).is_file(), f"OpenClash management component is missing: {name}")
+    for name in ("etc/init.d/openclash", "usr/share/openclash/openclash_core.sh",
+                 "etc/uci-defaults/zz-openclash-backup"):
+        script = path / name
+        require(script.is_file() and script.stat().st_mode & 0o111,
+                f"OpenClash runtime script is missing or not executable: {name}")
+    config = (path / "etc/config/openclash").read_text()
+    section = re.search(r"^config openclash 'config'\s*\n(.*?)(?=^config |\Z)",
+                        config, re.M | re.S)
+    require(section is not None, "OpenClash default configuration is missing")
+    options = dict(re.findall(r"^\s*option (\w+) '([^']*)'\s*$", section[1], re.M))
+    require(options.get("enable") == "0", "OpenClash must be disabled by default")
+    for name in ("etc/openclash/core", "tmp/etc/openclash/core"):
+        core = path / name
+        require(not core.is_symlink() and (not core.exists() or
+                (core.is_dir() and not any(core.iterdir()))),
+                "OpenClash core must be downloaded at runtime, not bundled")
+    for name in ("etc/openclash/clash", "usr/bin/clash", "usr/bin/clash_meta", "usr/bin/mihomo"):
+        core = path / name
+        require(not core.exists() and not core.is_symlink(),
+                f"Unexpected bundled proxy core: {name}")
 
 
 def check_defconfig_log(path):
