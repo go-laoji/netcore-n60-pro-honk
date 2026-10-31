@@ -2,6 +2,12 @@ name: N60 Pro - ImmortalWrt 6.12 + Honk
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_run_id:
+        description: 'Existing successful build run ID to publish without rebuilding (leave empty for a full build)'
+        required: false
+        type: string
+        default: ''
   push:
     branches:
       - main
@@ -32,8 +38,11 @@ env:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.publish_run_id == ''
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    outputs:
+      firmware_artifact_id: ${{ steps.firmware.outputs.artifact-id }}
     steps:
       - name: Checkout configuration
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -48,6 +57,7 @@ jobs:
           sh -n files/etc/uci-defaults/zz-honk-ui
           python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
           python3 -B scripts/test_ci_config.py
+          python3 -B scripts/test_release.py
 
       - name: Prepare Linux build environment
         env:
@@ -163,6 +173,7 @@ jobs:
           sha256sum -- * > sha256sums
 
       - name: Upload verified firmware
+        id: firmware
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: netcore-n60-pro-honk-${{ env.FIRMWARE_TAG }}-${{ github.run_id }}-${{ github.run_attempt }}
@@ -202,3 +213,80 @@ jobs:
             echo 'See honk-build-logs for the actual firmware commit, pinned feeds, configuration and logs.'
           } >> "$GITHUB_STEP_SUMMARY"
           df -hT /workdir || true
+
+  publish:
+    needs: build
+    if: >-
+      always() && !cancelled() &&
+      (needs.build.result == 'success' ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_run_id != ''))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - name: Checkout publication scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve verified firmware artifact
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+          BUILT_ARTIFACT_ID: ${{ needs.build.outputs.firmware_artifact_id }}
+        run: |
+          if [[ -n $PUBLISH_RUN_ID ]]; then
+            [[ $PUBLISH_RUN_ID =~ ^[1-9][0-9]*$ ]] || {
+              echo '::error::publish_run_id must be a positive run ID'
+              exit 1
+            }
+            source_run_id=$PUBLISH_RUN_ID
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id" > "$RUNNER_TEMP/source-run.json"
+            jq -e '.conclusion == "success" and .path == ".github/workflows/build-honk.yml"' \
+              "$RUNNER_TEMP/source-run.json" > /dev/null
+            target_sha=$(jq -r .head_sha "$RUNNER_TEMP/source-run.json")
+            source_attempt=$(jq -r .run_attempt "$RUNNER_TEMP/source-run.json")
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$source_run_id/artifacts?per_page=100" \
+              > "$RUNNER_TEMP/source-artifacts.json"
+            artifact_id=$(jq -r --arg suffix "-$source_run_id-$source_attempt" '
+              .artifacts | map(select(.expired == false and
+                (.name | startswith("netcore-n60-pro-honk-")) and
+                (.name | endswith($suffix)))) |
+              if length == 1 then .[0].id else error("Expected exactly one verified firmware artifact") end
+              ' "$RUNNER_TEMP/source-artifacts.json")
+          else
+            source_run_id=$GITHUB_RUN_ID
+            source_attempt=$GITHUB_RUN_ATTEMPT
+            target_sha=$GITHUB_SHA
+            artifact_id=$BUILT_ARTIFACT_ID
+          fi
+          {
+            echo "artifact_id=$artifact_id"
+            echo "source_run_id=$source_run_id"
+            echo "source_attempt=$source_attempt"
+            echo "target_sha=$target_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Download verified firmware
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.source.outputs.source_run_id }}
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish firmware to Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ steps.source.outputs.source_run_id }}
+          SOURCE_ATTEMPT: ${{ steps.source.outputs.source_attempt }}
+          TARGET_SHA: ${{ steps.source.outputs.target_sha }}
+        run: |
+          python3 -B scripts/publish_release.py artifacts \
+            --repository "$GITHUB_REPOSITORY" --target "$TARGET_SHA" \
+            --run-id "$SOURCE_RUN_ID" --run-attempt "$SOURCE_ATTEMPT" \
+            --output "$RUNNER_TEMP/firmware-release"
