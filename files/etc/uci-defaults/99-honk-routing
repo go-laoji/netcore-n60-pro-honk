@@ -1,0 +1,13 @@
+#!/bin/sh
+# Flow offloading can bypass the transparent proxy path.
+uci -q batch <<'EOF'
+set firewall.@defaults[0].flow_offloading='0'
+set firewall.@defaults[0].flow_offloading_hw='0'
+commit firewall
+set upnpd.config.enabled='1'
+set upnpd.config.enable_upnp='1'
+set upnpd.config.enable_natpmp='1'
+set upnpd.config.secure_mode='1'
+set upnpd.config.internal_iface='lan'
+commit upnpd
+EOF

@@ -1,0 +1,198 @@
+name: N60 Pro - ImmortalWrt 6.12 + Honk
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+      - 'feature/**'
+    paths:
+      - '.github/workflows/build-honk.yml'
+      - 'build.env'
+      - 'feeds.conf.default'
+      - 'immortalwrt-netcore-n60-pro-honk.config'
+      - 'scripts/**'
+      - 'files/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: honk-firmware-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TZ: Asia/Shanghai
+  OPENWRT_DIR: /workdir/openwrt
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - name: Checkout configuration
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate configuration inputs
+        run: |
+          mkdir -p build-logs
+          bash -n scripts/prepare-source.sh
+          sh -n files/etc/uci-defaults/99-honk-routing
+          sh -n files/etc/uci-defaults/zz-honk-ui
+          python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
+
+      - name: Prepare Linux build environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential clang llvm lld flex bison gawk gcc-multilib g++-multilib \
+            gettext git libncurses-dev libssl-dev libelf-dev dwarves \
+            python3 python3-setuptools python3-pyelftools rsync swig unzip \
+            zlib1g-dev file wget curl ccache device-tree-compiler jq pkgconf \
+            subversion tar zstd xsltproc quilt libtool autoconf automake \
+            autopoint cmake ninja-build libgmp-dev libmpc-dev libmpfr-dev
+          sudo apt-get clean
+          sudo mkdir -p /workdir
+          sudo chown "$(id -u):$(id -g)" /workdir
+          df -hT /workdir
+
+      - name: Prepare latest branch source and pinned feeds
+        run: bash scripts/prepare-source.sh "$OPENWRT_DIR" 2>&1 | tee build-logs/prepare.log
+
+      - name: Expand and verify build configuration
+        run: |
+          cd "$OPENWRT_DIR"
+          make defconfig 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/defconfig.log"
+          python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded \
+            --version-file firmware-version.json
+          ./scripts/diffconfig.sh > "$GITHUB_WORKSPACE/build-logs/config.diff"
+          cp .config "$GITHUB_WORKSPACE/build-logs/expanded.config"
+          cp build-inputs.txt "$GITHUB_WORKSPACE/build-logs/"
+          cp firmware-version.json "$GITHUB_WORKSPACE/build-logs/"
+          echo "FIRMWARE_TAG=$(jq -r .filename_tag firmware-version.json)" >> "$GITHUB_ENV"
+          echo "FIRMWARE_LABEL=$(jq -r .display_label firmware-version.json)" >> "$GITHUB_ENV"
+
+      - name: Download sources
+        run: |
+          cd "$OPENWRT_DIR"
+          (make download -j8 || make download -j1 V=s) 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/download.log"
+
+      - name: Compile firmware
+        run: |
+          cd "$OPENWRT_DIR"
+          (make -j"$(nproc)" || make -j1 V=s) 2>&1 | tee "$GITHUB_WORKSPACE/build-logs/compile.log"
+
+      - name: Verify actual kernel and installed packages
+        run: |
+          mapfile -t kernel_configs < <(find "$OPENWRT_DIR/build_dir" -type f \
+            -path '*/linux-mediatek_filogic/linux-6.12*/.config')
+          if [[ ${#kernel_configs[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one target kernel configuration'
+            exit 1
+          fi
+          python3 scripts/validate.py kernel "${kernel_configs[0]}"
+          cp "${kernel_configs[0]}" build-logs/kernel.config
+          shopt -s nullglob
+          manifests=("$OPENWRT_DIR"/bin/targets/mediatek/filogic/*netcore_n60-pro*.manifest)
+          if [[ ${#manifests[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one N60 Pro firmware manifest'
+            exit 1
+          fi
+          python3 scripts/validate.py manifest "${manifests[0]}"
+
+      - name: Verify version embedded in the firmware rootfs
+        run: |
+          mapfile -t release_files < <(find "$OPENWRT_DIR/build_dir" -type f \
+            -path '*/root-mediatek/etc/openwrt_release')
+          if [[ ${#release_files[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one target rootfs release file'
+            exit 1
+          fi
+          python3 scripts/validate.py release "${release_files[0]}" \
+            --version-file "$OPENWRT_DIR/firmware-version.json"
+          cp "${release_files[0]}" build-logs/openwrt_release
+          rootfs_dir=$(dirname -- "$(dirname -- "${release_files[0]}")")
+          python3 scripts/validate.py ui "$rootfs_dir"
+          cmp -- files/etc/uci-defaults/zz-honk-ui "$rootfs_dir/etc/uci-defaults/zz-honk-ui"
+
+      - name: Collect N60 Pro firmware
+        run: |
+          target_dir="$OPENWRT_DIR/bin/targets/mediatek/filogic"
+          mkdir -p artifacts
+          shopt -s nullglob
+          images=("$target_dir"/*"$FIRMWARE_TAG"*netcore_n60-pro*-sysupgrade.itb)
+          if [[ ${#images[@]} -ne 1 ]]; then
+            echo '::error::Expected exactly one N60 Pro sysupgrade.itb'
+            exit 1
+          fi
+          cp "${images[0]}" artifacts/
+          for output in "$target_dir"/*netcore_n60-pro*-recovery.itb \
+                        "$target_dir"/*netcore_n60-pro*.manifest \
+                        "$target_dir"/*netcore_n60-pro*.json \
+                        "$target_dir"/*.buildinfo; do
+            cp "$output" artifacts/
+          done
+          cp build-logs/expanded.config artifacts/
+          cp build-logs/kernel.config artifacts/
+          cp build-logs/config.diff artifacts/
+          cp build-logs/openwrt_release artifacts/
+          cp "$OPENWRT_DIR/firmware-version.json" artifacts/
+          cp "$OPENWRT_DIR/build-inputs.txt" artifacts/
+          cat > artifacts/DEVICE-LAYOUT.txt <<'EOF'
+          Netcore N60 Pro / ImmortalWrt openwrt-25.12 / Linux 6.12 / UBI-FIT
+          This image requires the matching upstream UBI/FIT boot and partition layout.
+          The old padavanonly 6.6 NMBM sysupgrade.bin layout is different.
+          Review README.md and your actual bootloader/partition layout before flashing.
+          Honk is installed with upstream defaults; initialize it in LuCI after boot.
+          EOF
+          cd artifacts
+          sha256sum -- * > sha256sums
+
+      - name: Upload verified firmware
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: netcore-n60-pro-honk-${{ env.FIRMWARE_TAG }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+      - name: Upload configuration and build logs
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: honk-build-logs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build-logs/
+            /workdir/openwrt/.config
+            /workdir/openwrt/build-inputs.txt
+            /workdir/openwrt/firmware-version.json
+            /workdir/openwrt/logs/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Build summary
+        if: always()
+        run: |
+          {
+            echo '### Netcore N60 Pro / Honk'
+            echo 'Source: ImmortalWrt openwrt-25.12 / Linux 6.12 / mediatek-filogic.'
+            if [[ -n ${FIRMWARE_LABEL:-} ]]; then
+              echo "Custom version: $FIRMWARE_LABEL (Asia/Shanghai build date)."
+            fi
+            echo 'Firmware is uploaded only after kernel and package manifest checks pass.'
+            echo 'The UBI/FIT sysupgrade.itb requires the matching bootloader and partition layout.'
+            echo 'See honk-build-logs for the actual firmware commit, pinned feeds, configuration and logs.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          df -hT /workdir || true
