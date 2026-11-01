@@ -1,6 +1,9 @@
 name: N60 Pro - ImmortalWrt 6.12 + Honk
 
 on:
+  schedule:
+    # UTC Monday 00:00 = Asia/Shanghai Monday 08:00.
+    - cron: '0 0 * * 1'
   workflow_dispatch:
     inputs:
       publish_run_id:
@@ -8,6 +11,11 @@ on:
         required: false
         type: string
         default: ''
+      cleanup_only:
+        description: 'Only clean workflow history; keep the latest 10 runs without building or publishing'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -25,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: honk-firmware-${{ github.ref }}
+  group: honk-${{ inputs.cleanup_only && 'cleanup' || 'firmware' }}-${{ github.ref }}
   cancel-in-progress: true
 
 defaults:
@@ -38,7 +46,9 @@ env:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.publish_run_id == ''
+    if: >-
+      github.event_name != 'workflow_dispatch' ||
+      (!inputs.cleanup_only && inputs.publish_run_id == '')
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     outputs:
@@ -60,6 +70,7 @@ jobs:
           python3 -B scripts/test_ci_config.py
           python3 -B scripts/test_release.py
           python3 -B scripts/test_openclash.py
+          python3 -B scripts/test_cleanup_runs.py
 
       - name: Prepare Linux build environment
         env:
@@ -221,7 +232,7 @@ jobs:
   publish:
     needs: build
     if: >-
-      always() && !cancelled() &&
+      always() && !cancelled() && !inputs.cleanup_only &&
       (needs.build.result == 'success' ||
       (github.event_name == 'workflow_dispatch' && inputs.publish_run_id != ''))
     runs-on: ubuntu-24.04
@@ -294,3 +305,30 @@ jobs:
             --repository "$GITHUB_REPOSITORY" --target "$TARGET_SHA" \
             --run-id "$SOURCE_RUN_ID" --run-attempt "$SOURCE_ATTEMPT" \
             --output "$RUNNER_TEMP/firmware-release"
+
+  cleanup:
+    needs: [build, publish]
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+    concurrency:
+      group: honk-history-cleanup-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout cleanup scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate history cleanup
+        run: python3 -B scripts/test_cleanup_runs.py
+
+      - name: Keep the latest 10 workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B scripts/cleanup_runs.py --repository "$GITHUB_REPOSITORY" \
+            --keep 10 --current-run-id "$GITHUB_RUN_ID" --apply
