@@ -32,19 +32,18 @@ cp "$PROJECT_DIR/feeds.conf.default" feeds.conf.default
 resolved_feeds=()
 while read -r feed_type feed_name feed_url; do
     [[ $feed_type == src-git ]] || continue
-    if [[ $feed_name == honk ]]; then
-        branch=${feed_url##*;}
-        expected_commit=$(git -C "feeds/$feed_name" rev-parse --verify "refs/remotes/origin/$branch")
-        feed_url=${feed_url%;*}^$expected_commit
-    else
-        expected_commit=${feed_url##*^}
-    fi
+    [[ $feed_url == *';'* ]] || {
+        echo "Expected a branch for feed: $feed_name" >&2
+        exit 1
+    }
+    branch=${feed_url##*;}
+    expected_commit=$(git -C "feeds/$feed_name" rev-parse --verify "refs/remotes/origin/$branch")
     [[ $expected_commit =~ ^[0-9a-f]{40}$ ]]
     [[ $(git -C "feeds/$feed_name" rev-parse --verify HEAD) == "$expected_commit" ]] || {
         echo "Feed revision mismatch: $feed_name" >&2
         exit 1
     }
-    resolved_feeds+=("$feed_type $feed_name $feed_url")
+    resolved_feeds+=("$feed_type $feed_name ${feed_url%;*}^$expected_commit")
 done < feeds.conf.default
 
 test -f feeds/honk/honk/Makefile
@@ -59,7 +58,7 @@ test -f feeds/istore/luci/luci-lib-taskd/Makefile
 test -f feeds/istore/luci/luci-lib-xterm/Makefile
 test -f feeds/istore/luci/taskd/Makefile
 ./scripts/feeds install -a
-# The fixed feed's optional WeeChat UI triggers a Kconfig self-dependency.
+# The LuCI feed's optional WeeChat UI can trigger a Kconfig self-dependency.
 # Unregister it before defconfig; this firmware does not use WeeChat.
 ./scripts/feeds uninstall luci-app-weechat
 ./scripts/feeds install -f -p honk honk luci-app-honk

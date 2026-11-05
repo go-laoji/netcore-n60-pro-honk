@@ -90,7 +90,7 @@ jobs:
           sudo chown "$(id -u):$(id -g)" /workdir
           df -hT /workdir
 
-      - name: Prepare latest firmware and Honk sources and pinned dependencies
+      - name: Prepare latest firmware and feed sources
         run: bash scripts/prepare-source.sh "$OPENWRT_DIR" 2>&1 | tee build-logs/prepare.log
 
       - name: Expand and verify build configuration
