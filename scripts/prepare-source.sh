@@ -28,15 +28,23 @@ python3 "$PROJECT_DIR/scripts/validate.py" source .
 cp "$PROJECT_DIR/feeds.conf.default" feeds.conf.default
 ./scripts/feeds update -a
 
-# Verify that feeds honored every immutable revision in feeds.conf.default.
+# Verify feed checkouts and record the exact commit used for each one.
+resolved_feeds=()
 while read -r feed_type feed_name feed_url; do
     [[ $feed_type == src-git ]] || continue
-    expected_commit=${feed_url##*^}
+    if [[ $feed_name == honk ]]; then
+        branch=${feed_url##*;}
+        expected_commit=$(git -C "feeds/$feed_name" rev-parse --verify "refs/remotes/origin/$branch")
+        feed_url=${feed_url%;*}^$expected_commit
+    else
+        expected_commit=${feed_url##*^}
+    fi
     [[ $expected_commit =~ ^[0-9a-f]{40}$ ]]
-    [[ $(git -C "feeds/$feed_name" rev-parse HEAD) == "$expected_commit" ]] || {
+    [[ $(git -C "feeds/$feed_name" rev-parse --verify HEAD) == "$expected_commit" ]] || {
         echo "Feed revision mismatch: $feed_name" >&2
         exit 1
     }
+    resolved_feeds+=("$feed_type $feed_name $feed_url")
 done < feeds.conf.default
 
 test -f feeds/honk/honk/Makefile
@@ -72,8 +80,8 @@ chmod +x files/etc/uci-defaults/99-honk-routing files/etc/uci-defaults/zz-honk-u
     printf 'Firmware repository: %s\nFirmware branch: %s\nFirmware commit: %s\n' \
         "$FIRMWARE_REPOSITORY" "$FIRMWARE_BRANCH" "$FIRMWARE_RESOLVED_COMMIT"
     printf 'Configuration repository commit: %s\n' "$(git -C "$PROJECT_DIR" rev-parse HEAD)"
-    printf '\nPinned feeds:\n'
-    cat feeds.conf.default
+    printf '\nResolved feeds:\n'
+    printf '%s\n' "${resolved_feeds[@]}"
     printf '\nFirmware version:\n'
     cat firmware-version.json
 } > build-inputs.txt
