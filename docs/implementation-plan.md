@@ -173,3 +173,11 @@
 本次验证：新增 9 个清理测试与原有 20 个测试全部通过，覆盖超过 100 条的分页和重复页边界、按创建时间排序、少于 10 次时全部保留、跨分支及不同结论、当前/未完成运行保护、删除前发现重跑、预览无删除、显式清空及 API 失败中止。配置种子、Python 语法、actionlint（含 ShellCheck）、隐私路径和 `git diff --check` 均通过。本地未构建固件。
 
 实际清理：2026-11-01，先预览确认 9 次旧运行均已完成，再以同一脚本执行 `--keep 0 --apply`，9 次全部删除。GitHub API 复查 `total_count=0`；原有 3 个 Release 仍保留各 14 个资产（共 42 个），对应 3 个固件 tag 保留。之后自动和手动清理固定使用 `--keep 10`。实现提交 `78307e0`，直接提交在本地 `develop`；未创建功能分支、未推送、未触发新编译，定时与 CI 清理入口将在后续推送到默认分支后生效。
+
+## 在 Release 中显示 Honk 版本（Issue #10）
+
+跟踪 [Issue #10](https://github.com/go-laoji/netcore-n60-pro-honk/issues/10)。
+
+1. 复用发布阶段已校验的固件附件，从 N60 Pro manifest 提取 `honk` 和 `luci-app-honk` 的完整包版本，从 `build-inputs.txt` 提取构建使用的 `kenzok8/openwrt-honk` feed 提交。
+2. 在 Release 正文分别列出两个包版本、上游提交链接和固件配置提交。常规发布和通过 `publish_run_id` 补发均使用源构建的附件。版本或上游提交缺失时终止发布。
+3. 验证正文生成、附件完整性和缺少版本的处理，并使用已发布固件附件验证旧构建兼容性。
