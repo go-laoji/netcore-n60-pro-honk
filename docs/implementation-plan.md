@@ -174,10 +174,11 @@
 
 实际清理：2026-11-01，先预览确认 9 次旧运行均已完成，再以同一脚本执行 `--keep 0 --apply`，9 次全部删除。GitHub API 复查 `total_count=0`；原有 3 个 Release 仍保留各 14 个资产（共 42 个），对应 3 个固件 tag 保留。之后自动和手动清理固定使用 `--keep 10`。实现提交 `78307e0`，直接提交在本地 `develop`；未创建功能分支、未推送、未触发新编译，定时与 CI 清理入口将在后续推送到默认分支后生效。
 
-## 在 Release 中显示 Honk 版本（Issue #10）
+## 跟随最新 Honk 并在 Release 中记录版本（Issue #10）
 
 跟踪 [Issue #10](https://github.com/go-laoji/netcore-n60-pro-honk/issues/10)。
 
-1. 复用发布阶段已校验的固件附件，从 N60 Pro manifest 提取 `honk` 和 `luci-app-honk` 的完整包版本，从 `build-inputs.txt` 提取构建使用的 `kenzok8/openwrt-honk` feed 提交。
-2. 在 Release 正文分别列出两个包版本、上游提交链接和固件配置提交。常规发布和通过 `publish_run_id` 补发均使用源构建的附件。版本或上游提交缺失时终止发布。
-3. 验证正文生成、附件完整性和缺少版本的处理，并使用已发布固件附件验证旧构建兼容性。
+1. 每次构建通过 ImmortalWrt 的 feeds 工具获取 `kenzok8/openwrt-honk` 的 `main` 分支，记录实际检出的 SHA。其他 feeds 沿用已配置的 SHA。
+2. 复用发布阶段已校验的固件附件，从 N60 Pro manifest 提取 `honk` 和 `luci-app-honk` 的完整包版本，从 `build-inputs.txt` 提取构建使用的 Honk feed 提交。
+3. 在 Release 正文分别列出两个包版本、上游提交链接和固件配置提交。常规发布和通过 `publish_run_id` 补发均使用源构建的附件。版本或上游提交缺失时终止发布。
+4. 验证分支更新、正文生成、附件完整性和缺少版本的处理，并使用已发布固件附件验证旧构建兼容性。
