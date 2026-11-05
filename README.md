@@ -24,7 +24,7 @@
 ## 安装内容
 
 - `honk`、`luci-app-honk`；Doona 静态资源和中文翻译由上游 LuCI 包提供。
-- `luci-app-openclash`：备用管理界面及运行脚本，不预装 Clash/Mihomo 代理内核。使用当前固定 LuCI feed 的 `0.48.002`，中文翻译随应用提供。
+- `luci-app-openclash`：来自 ImmortalWrt 25.12 LuCI feed 的备用管理界面及运行脚本，中文翻译随应用提供，不预装 Clash/Mihomo 代理内核。
 - `v2ray-geoip`、`v2ray-geosite`：Honk 路由所需的数据包，不包含 V2Ray/Xray 代理核心。
 - Honk 所需的 BTF、cgroup BPF、BPF events、网络命名空间，以及 `kmod-sched-core`、`kmod-sched-bpf`、`kmod-veth`、`kmod-nft-queue`。
 - 正常路由/防火墙/无线、中文 LuCI、默认 Argon 主题、argon-config、QuickStart、UPnP、ttyd、htop、nano、SFTP 等管理功能。设备驱动依赖由官方 profile 补全。
@@ -37,13 +37,13 @@
 
 默认主题为 **Argon**，同时安装 `luci-app-argon-config` 及中文翻译。`zz-honk-ui` 在主题包默认脚本之后执行，明确将 `luci.main.mediaurlbase` 设置为 `/luci-static/argon`，因此首次启动会使用 Argon。
 
-`luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 和 argon-config 使用当前固定的官方 LuCI feed；QuickStart、其 LuCI 页面和 iStore 组件分别来自固定提交的 [nas-packages](https://github.com/linkease/nas-packages/tree/aeb8ca964e437c06c507a171d38e0c7927c2384d/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/2a71fe50f64f57b85c190d34d7ffc0244b4ca794/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/a97ace34f2da358a015b094d326bba2697697f2e)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
+`luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 和 argon-config 来自 ImmortalWrt 25.12 LuCI feed。QuickStart、其 LuCI 页面和 iStore 组件分别来自 [nas-packages](https://github.com/linkease/nas-packages/tree/master/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/main/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/main)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
 
 Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态资源、QuickStart 可执行后端、LuCI controller 和默认主题脚本，防止只选中界面却遗漏运行组件。
 
 ### OpenClash 备用代理
 
-参考原仓库只选 `luci-app-openclash`、排除 `mihomo` 软件包的方式。使用 [当前固定的 ImmortalWrt LuCI 包](https://github.com/immortalwrt/luci/blob/c84adb975e207ae8b14982191838ec6218d632cd/applications/luci-app-openclash/Makefile)，不新增 feed。该包的 `Build/Compile` 为空，构建阶段只安装管理组件和必要数据，不编译或预下载 OpenClash/Mihomo 内核；Honk 核心仍按现有方式随固件安装。
+参考原仓库只选 `luci-app-openclash`、排除 `mihomo` 软件包的方式。该包的 `Build/Compile` 为空，构建阶段只安装管理组件和必要数据，不编译或预下载 OpenClash/Mihomo 内核。Honk 核心随固件安装。 [ImmortalWrt 25.12 的 OpenClash 包定义](https://github.com/immortalwrt/luci/blob/openwrt-25.12/applications/luci-app-openclash/Makefile)
 
 按包定义补齐 `dnsmasq-full`、Ruby/YAML、bash、unzip、`kmod-inet-diag`、`kmod-nft-tproxy` 和 `kmod-tun`。普通 `dnsmasq` 被关闭，启用 `dnsmasq_full_nftset`，与当前 firewall4/nftables 后端配套。
 
@@ -74,14 +74,14 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | 文件 | 用途 |
 | --- | --- |
 | `build.env` | 固件源码仓库和需要跟随的分支，不固定提交 |
-| `feeds.conf.default` | 固定版本的 Honk、官方 packages/LuCI/routing、QuickStart 和 iStore 依赖 feeds |
+| `feeds.conf.default` | Honk、官方 packages/LuCI/routing、QuickStart 和 iStore 各自跟随的分支 |
 | `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取分支最新源码、记录实际 SHA、验证版本、安装 feeds、复制配置 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核、manifest 及实际 rootfs；确认 OpenClash 未预装核心 |
 | `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
-| `scripts/publish_release.py` | 校验已有产物，以固件实际版本和发布时刻创建 Release |
-| `scripts/test_release.py` | 回归验证发布时间、资产校验及草稿上传后发布 |
+| `scripts/publish_release.py` | 校验产物并创建 Release，正文记录实际安装的 Honk 软件包版本和上游提交 |
+| `scripts/test_release.py` | 回归验证发布时间、Honk 版本、资产校验及草稿上传后发布 |
 | `scripts/test_openclash.py` | 验证备用应用放行范围、默认关闭及未预装内核 |
 | `scripts/cleanup_runs.py` | 分页读取仓库运行记录并按最近次数清理，默认仅预览 |
 | `scripts/test_cleanup_runs.py` | 验证跨页保留、运行保护和删除前重查状态 |
@@ -126,11 +126,11 @@ python3 -B scripts/cleanup_runs.py --repository go-laoji/netcore-n60-pro-honk --
 
 ## 构建流程和产物
 
-流程：静态检查 → 安装 Linux 构建依赖 → 拉取 `openwrt-25.12` 最新源码及固定版本 feeds → `make defconfig` → 检查配置 → `make download` → 编译 → 检查实际内核配置和软件包 manifest → 上传固件 artifact → 下载并校验 SHA256 和固件版本 → 发布 Release。
+GitHub Actions 先做静态检查、安装 Linux 构建依赖并获取固件和各 feed 分支的最新源码，再运行 `make defconfig`、校验配置、下载源码和编译固件。检查实际内核配置及软件包 manifest 后上传固件 artifact。发布 job 下载 artifact 并核对 SHA256 和固件版本，再创建 Release。
 
 配置检查会确认只有 N60 Pro 被选中，Honk、OpenClash 管理组件及必需依赖齐全、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、预装 Clash/Mihomo 核心、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue、网络命名空间，以及备用代理需要的 TProxy、TUN 和 inet-diag。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
 
-配置展开前会注销未使用的 `luci-app-weechat`，避开当前固定 feed 在 Kconfig 中触发的自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
+配置展开前会注销未使用的 `luci-app-weechat`，避开 LuCI feed 曾触发的 Kconfig 自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
 
 iStore/QuickStart 的依赖中显式选择 GNU tar、`libuci-lua` 和 tar 的 XZ 提供者 `xz-utils`，满足生成 Kconfig 的条件依赖，避免管理页在配置展开时被丢弃。
 
@@ -145,6 +145,8 @@ Actions artifacts 同时受最近 10 次运行的保留规则约束，所属旧�
 
 固件 artifact 中的全部文件还会作为独立资产发布到 [Releases](https://github.com/go-laoji/netcore-n60-pro-honk/releases)。发布前再次验证完整的 `sha256sums` 和实际固件版本；先上传到草稿，全部成功后公开，避免公开缺少文件的固件。
 
+Release 正文从该次固件的 manifest 读取 `honk` 和 `luci-app-honk` 的完整包版本，并从 `build-inputs.txt` 读取 `openwrt-honk` 的实际提交。正文分别列出上游提交链接和固件配置提交。用 `publish_run_id` 补发时，版本和提交均取自源构建的产物。
+
 Release 名称使用最终 `openwrt_release` 的 `DISTRIB_DESCRIPTION`，追加**创建 Release 时**的北京时间 `HH:MM`，例如 `ImmortalWrt 25.12-SNAPSHOT rXXXXX-abcdef go-laoji-10/31 21:35`。时分在编译完成后的发布步骤中取得；固件内的 `go-laoji-MM/DD` 仍表示编译配置日期，跨日补发时保持原值。Git tag 使用合法化的版本名和发布年月日时分，例如 `firmware-immortalwrt-25-12-snapshot-rxxxxx-abcdef-go-laoji-10-31-20261031-2135`，并指向生成该固件的仓库提交；已有 Release 不会被覆盖。
 
 本地没有执行配置展开、工具链构建或固件编译；已有固件完成云端编译和验收，可在 Releases 查看。旧运行被清理后，构建配置和输入记录仍可在对应 Release 的资产中获取。刷机和 Honk 实际路由行为仍需在布局匹配的设备上验收。
@@ -158,15 +160,15 @@ Release 名称使用最终 `openwrt_release` 的 `DISTRIB_DESCRIPTION`，追加*
 3. 运行系统检查，确认 Linux >= 6.12、`/sys/kernel/btf/vmlinux`、bpffs 和所需模块正常，再启用服务。
 4. API 就绪后，从管理页打开 Doona。检查客户端代理路由、直连路由和 DNS 的实际行为。
 
-管理入口和 API 应只用于可信 LAN。详情见 [Honk 固定版本的使用说明](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979a2b2c659010a22cd0281482947/README.md)。
+管理入口和 API 应只用于可信 LAN。 [Honk 使用说明](https://github.com/kenzok8/openwrt-honk/blob/main/README.md)
 
 ## 更新版本与本地检查
 
 `build.env` 只配置固件源码仓库及 `FIRMWARE_BRANCH=openwrt-25.12`，不配置固定 SHA。每次 Actions 运行时都会获取该分支当时的最新提交，并将实际 SHA 写入 `build-inputs.txt`，随固件和日志保存。上游有更新后，手动运行 Actions 或按上文推送构建配置即可使用新代码；上游提交本身不会自动触发本仓库构建。
 
-`feeds.conf.default` 中的 Honk、官方软件包/LuCI/routing 和 QuickStart 依赖仍独立固定完整提交。更新依赖版本时复核内核、设备 profile、镜像布局、包依赖、Honk 核心/Doona 归档及校验值，再触发新构建。
+每次构建也会获取 `feeds.conf.default` 中七个 feed 各自分支的最新提交。官方 `packages`、`luci` 和 `routing` 跟随 `openwrt-25.12` 兼容分支。Honk、QuickStart 的 LuCI 页面和 iStore 跟随 `main`，QuickStart 后端跟随 `master`。各 feed 实际检出的 SHA 写入 `build-inputs.txt`。
 
-Honk 的 [包定义](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979a2b2c659010a22cd0281482947/honk/Makefile) 会下载上游固定版本、带 SHA256 校验的 aarch64 核心；[LuCI 包](https://github.com/kenzok8/openwrt-honk/blob/e1a68ffcced979a2b2c659010a22cd0281482947/luci-app-honk/Makefile) 同样下载固定 Doona 归档。固件构建无需另行维护 Rust/Zig/Node 编译链，也不会在路由器启动后下载核心。
+Honk 和 LuCI 的包定义分别指定 aarch64 核心和 Doona 归档及其 SHA256，构建时下载并校验。固件构建无需另行维护 Rust/Zig/Node 编译链。 [Honk 包定义](https://github.com/kenzok8/openwrt-honk/blob/main/honk/Makefile) · [LuCI 包定义](https://github.com/kenzok8/openwrt-honk/blob/main/luci-app-honk/Makefile)
 
 以下命令只做本地只读检查，不展开 OpenWrt 配置，也不构建固件：
 

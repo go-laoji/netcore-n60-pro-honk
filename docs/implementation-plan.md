@@ -6,7 +6,7 @@
 
 - 参考 [go-laoji/netcore-n60-pro](https://github.com/go-laoji/netcore-n60-pro) 的配置和 Actions 流程，当前仓库从空仓库独立整理。
 - 原计划使用 padavanonly 6.6；核对发现 Honk 的 `honk/files/control.sh` 要求 Linux >= 6.12，用户已确认改用满足要求的新源码。
-- 使用 ImmortalWrt `openwrt-25.12`，Linux 6.12、`mediatek/filogic`、`netcore_n60-pro`、`aarch64_cortex-a53`。按 Issue #5 的调整，固件源码每次构建跟随该分支最新提交，记录实际 SHA；Honk 和其他依赖 feeds 继续独立固定版本。
+- 使用 ImmortalWrt `openwrt-25.12`，Linux 6.12、`mediatek/filogic`、`netcore_n60-pro`、`aarch64_cortex-a53`。按 Issue #5 和 Issue #10 的调整，固件源码与各 feed 每次构建跟随各自分支的最新提交，并记录实际 SHA。
 - 主代理集成 `kenzok8/openwrt-honk` 的 `honk` 和 `luci-app-honk`；Doona、中文翻译由上游 LuCI 包提供。按 Issue #8 增加默认关闭的 OpenClash 备用管理组件，其 Mihomo 内核由运行时下载。GeoIP/GeoSite 是必要数据包，不属于额外代理服务。
 - 保留路由、无线、LuCI、UPnP、ttyd 等基本功能；移除旧仓库的其他源码分支、更新检查器、聚合代理 feed、Go 覆盖和 daed 链路。OpenClash 使用现有固定 LuCI feed，不恢复聚合 feed 或核心预装流程。
 - 新源码是 UBI/FIT 布局，旧 padavanonly 设备树使用 NMBM；新产物不能作为旧 `sysupgrade.bin` 的直接替代。提供构建配置，不操作设备或引导程序。
@@ -173,3 +173,16 @@
 本次验证：新增 9 个清理测试与原有 20 个测试全部通过，覆盖超过 100 条的分页和重复页边界、按创建时间排序、少于 10 次时全部保留、跨分支及不同结论、当前/未完成运行保护、删除前发现重跑、预览无删除、显式清空及 API 失败中止。配置种子、Python 语法、actionlint（含 ShellCheck）、隐私路径和 `git diff --check` 均通过。本地未构建固件。
 
 实际清理：2026-11-01，先预览确认 9 次旧运行均已完成，再以同一脚本执行 `--keep 0 --apply`，9 次全部删除。GitHub API 复查 `total_count=0`；原有 3 个 Release 仍保留各 14 个资产（共 42 个），对应 3 个固件 tag 保留。之后自动和手动清理固定使用 `--keep 10`。实现提交 `78307e0`，直接提交在本地 `develop`；未创建功能分支、未推送、未触发新编译，定时与 CI 清理入口将在后续推送到默认分支后生效。
+
+## 跟随最新 feeds 并在 Release 中记录 Honk 版本（Issue #10）
+
+跟踪 [Issue #10](https://github.com/go-laoji/netcore-n60-pro-honk/issues/10)。
+
+1. [x] 每次构建通过 ImmortalWrt 的 feeds 工具获取七个 feed 各自的分支最新提交，记录实际检出的 SHA。官方 feeds 跟随 ImmortalWrt 25.12 源码指定的兼容分支，Honk、QuickStart 和 iStore 跟随各自的默认分支。
+2. [x] 复用发布阶段已校验的固件附件，从 N60 Pro manifest 提取 `honk` 和 `luci-app-honk` 的完整包版本，从 `build-inputs.txt` 提取构建使用的 Honk feed 提交。
+3. [x] 在 Release 正文分别列出两个包版本、上游提交链接和固件配置提交。常规发布和通过 `publish_run_id` 补发均使用源构建的附件。版本或上游提交缺失时终止发布。
+4. [x] 本地核对上游分支、正文生成、附件完整性和缺少版本的处理，并使用已发布固件附件验证旧构建兼容性。固件编译由 GitHub Actions 执行。
+
+32 个回归测试、配置检查、Bash/sh 语法和 actionlint 检查通过。临时 Git 仓库验证了分支前移后新构建会记录新提交，以及检出不匹配时停止准备。2026-11-05 已发布固件的完整附件通过 SHA256 校验和 Release 正文预演，显示 `honk 2026.10.24-r2`、`luci-app-honk 2026.10.30-r1` 和上游 `e1a68ffcced9`。
+
+改动提交在本地功能分支 `feature/honk-release-versions`。本地未进行配置展开或固件编译，首次使用新 feed 策略的完整编译和发布由推送后的 GitHub Actions 验证。
