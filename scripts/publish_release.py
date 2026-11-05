@@ -15,6 +15,9 @@ from zoneinfo import ZoneInfo
 import validate
 
 
+HONK_FEED_URL = "https://github.com/kenzok8/openwrt-honk"
+
+
 def verify_assets(artifacts):
     files = list(artifacts.iterdir())
     if not files or any(not path.is_file() or path.is_symlink() for path in files):
@@ -43,6 +46,24 @@ def verify_assets(artifacts):
     return sorted(path.name for path in files)
 
 
+def read_honk_metadata(artifacts):
+    manifests = list(artifacts.glob("*netcore_n60-pro*.manifest"))
+    validate.require(len(manifests) == 1, "Expected exactly one N60 Pro firmware manifest")
+    packages = validate.read_manifest(manifests[0])
+    versions = {}
+    for name in ("honk", "luci-app-honk"):
+        version = packages.get(name)
+        validate.require(version, f"Firmware manifest is missing version for {name}")
+        versions[name] = version
+
+    build_inputs = (artifacts / "build-inputs.txt").read_text()
+    feeds = re.findall(r"^src-git[ \t]+honk[ \t]+(.+)$", build_inputs, re.M)
+    validate.require(len(feeds) == 1, "Expected exactly one Honk feed in build-inputs.txt")
+    pin = re.fullmatch(rf"{re.escape(HONK_FEED_URL)}(?:\.git)?\^([0-9a-f]{{40}})", feeds[0].strip())
+    validate.require(pin is not None, "Honk feed in build-inputs.txt must include its resolved commit")
+    return versions, pin[1]
+
+
 def prepare_release(artifacts, repository, target, run_id, run_attempt, now=None):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):
         raise ValueError("Invalid repository")
@@ -51,6 +72,7 @@ def prepare_release(artifacts, repository, target, run_id, run_attempt, now=None
     if not re.fullmatch(r"[1-9][0-9]*", str(run_id)) or not re.fullmatch(r"[1-9][0-9]*", str(run_attempt)):
         raise ValueError("Invalid source workflow run or attempt")
     assets = verify_assets(artifacts)
+    honk_versions, honk_feed_commit = read_honk_metadata(artifacts)
     release_text = (artifacts / "openwrt_release").read_text()
     description = re.search(r"^DISTRIB_DESCRIPTION='([^']+)'$", release_text, re.M)[1]
     # Read the clock after asset verification, immediately before Release creation.
@@ -66,6 +88,8 @@ def prepare_release(artifacts, repository, target, run_id, run_attempt, now=None
         "target": target,
         "created_at": release_time.isoformat(timespec="seconds"),
         "source_run_url": f"https://github.com/{repository}/actions/runs/{run_id}/attempts/{run_attempt}",
+        "honk_versions": honk_versions,
+        "honk_feed_commit": honk_feed_commit,
         "url": f"https://github.com/{repository}/releases/tag/{tag}",
         "assets": assets,
     }
@@ -75,9 +99,13 @@ def publish(metadata, artifacts, output):
     output.mkdir(parents=True, exist_ok=True)
     (output / "release.json").write_text(json.dumps(metadata, indent=2) + "\n")
     notes = output / "notes.md"
+    package_notes = "\n".join(f"- `{name}` `{version}`" for name, version in metadata["honk_versions"].items())
+    honk_commit = metadata["honk_feed_commit"]
     notes.write_text(
         f"固件版本：{metadata['name']}\n\n"
         f"设备：Netcore N60 Pro / ImmortalWrt 25.12 / Linux 6.12 / UBI-FIT。\n\n"
+        f"**Honk 软件包版本**\n\n{package_notes}\n\n"
+        f"openwrt-honk 提交：[`{honk_commit[:12]}`]({HONK_FEED_URL}/commit/{honk_commit})。\n\n"
         f"来源构建：[GitHub Actions]({metadata['source_run_url']})。\n\n"
         f"配置提交：`{metadata['target']}`。\n\n"
         f"Release 创建时间：{metadata['created_at']}（Asia/Shanghai）。\n\n"

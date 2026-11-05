@@ -168,12 +168,19 @@ def check_kernel(path):
                 f"Kernel requires CONFIG_{name}=y/m")
 
 
-def check_manifest(path):
+def read_manifest(path):
     packages = {}
     for line in path.read_text().splitlines():
         parts = line.split()
         if parts:
-            packages[parts[0]] = parts[2] if len(parts) >= 3 and parts[1] == "-" else ""
+            name = parts[0]
+            require(name not in packages, f"Duplicate package in firmware manifest: {name}")
+            packages[name] = parts[2] if len(parts) == 3 and parts[1] == "-" else ""
+    return packages
+
+
+def check_manifest(path):
+    packages = read_manifest(path)
     for name in REQUIRED_PACKAGES:
         present = name in packages
         if name == "libubox":
