@@ -130,7 +130,7 @@ GitHub Actions 先做静态检查、安装 Linux 构建依赖并获取固件和�
 
 配置检查会确认只有 N60 Pro 被选中，Honk、OpenClash 管理组件及必需依赖齐全、架构正确、Linux 6.12/BTF 未被配置展开丢弃，且无其他代理、预装 Clash/Mihomo 核心、TurboACC/SFE 或 bridger。firewall4 需要的 offload 模块允许安装，流量卸载开关由随固件安装的 UCI defaults 关闭。编译后的检查还会验证实际内核的 BPF syscall/JIT、BTF、TC ingress/cls_bpf、veth、nft queue、网络命名空间，以及备用代理需要的 TProxy、TUN 和 inet-diag。多线程编译失败时，Actions 会用单线程 `V=s` 重试并保留日志。
 
-配置展开前会注销未使用的 `luci-app-weechat`，避开 LuCI feed 曾触发的 Kconfig 自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
+配置展开前会注销未使用的 `luci-app-weechat`、`dnsdist`（含 `dnsdist-full`）、`knot-resolver`、`openappid` 和 `snort3`，避开 feeds 中的 Kconfig 自依赖。`make defconfig` 后额外检查日志中的 Kconfig error，因为该命令遇到部分配置错误仍可能返回成功。自定义版本显式启用 `IMAGEOPT` 和 `VERSIONOPT`，防止日期标识被隐藏选项清除。
 
 iStore/QuickStart 的依赖中显式选择 GNU tar、`libuci-lua` 和 tar 的 XZ 提供者 `xz-utils`，满足生成 Kconfig 的条件依赖，避免管理页在配置展开时被丢弃。
 

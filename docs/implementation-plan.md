@@ -186,3 +186,5 @@
 32 个回归测试、配置检查、Bash/sh 语法和 actionlint 检查通过。临时 Git 仓库验证了分支前移后新构建会记录新提交，以及检出不匹配时停止准备。2026-11-05 已发布固件的完整附件通过 SHA256 校验和 Release 正文预演，显示 `honk 2026.10.24-r2`、`luci-app-honk 2026.10.30-r1` 和上游 `e1a68ffcced9`。
 
 改动提交在本地功能分支 `feature/honk-release-versions`。本地未进行配置展开或固件编译，首次使用新 feed 策略的完整编译和发布由推送后的 GitHub Actions 验证。
+
+首次云端运行 `42017894101` 在 `make defconfig` 阶段遇到 `dnsdist`、`dnsdist-full`、`snort3`、`knot-resolver` 和 `openappid` 的 Kconfig 自依赖。实际配置未选择这些包，改为在注册 feeds 后注销对应的四个软件包源码，并保留 WeeChat 的同类处理。所有 feed 继续跟随最新提交，配置验收继续检查 Kconfig 错误。

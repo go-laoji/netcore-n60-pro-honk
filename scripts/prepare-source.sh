@@ -58,15 +58,24 @@ test -f feeds/istore/luci/luci-lib-taskd/Makefile
 test -f feeds/istore/luci/luci-lib-xterm/Makefile
 test -f feeds/istore/luci/taskd/Makefile
 ./scripts/feeds install -a
-# The LuCI feed's optional WeeChat UI can trigger a Kconfig self-dependency.
-# Unregister it before defconfig; this firmware does not use WeeChat.
-./scripts/feeds uninstall luci-app-weechat
 ./scripts/feeds install -f -p honk honk luci-app-honk
 ./scripts/feeds install -f -p luci luci-theme-argon luci-app-argon-config luci-compat luci-app-openclash
 ./scripts/feeds install -f -p nas quickstart
 ./scripts/feeds install -f -p nas_luci luci-app-quickstart
 ./scripts/feeds install -f -p istore luci-app-store luci-lib-taskd luci-lib-xterm taskd
-test ! -e package/feeds/luci/luci-app-weechat
+
+# These unused packages generate Kconfig self-dependencies on ImmortalWrt 25.12.
+# The dnsdist source supplies both dnsdist and dnsdist-full.
+conflicting_packages=(luci-app-weechat dnsdist knot-resolver openappid snort3)
+./scripts/feeds uninstall "${conflicting_packages[@]}"
+for package in "${conflicting_packages[@]}"; do
+    for registration in package/feeds/*/"$package"; do
+        [[ ! -L $registration ]] || {
+            echo "Conflicting package is still registered: $registration" >&2
+            exit 1
+        }
+    done
+done
 
 cp "$PROJECT_DIR/$CONFIG_FILE" .config
 python3 "$PROJECT_DIR/scripts/stamp-version.py" .
