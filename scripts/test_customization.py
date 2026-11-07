@@ -34,7 +34,8 @@ class CustomPluginTests(unittest.TestCase):
     def test_empty_inputs_preserve_defaults_byte_for_byte(self):
         self.merge()
         self.assertEqual(self.config.read_bytes(), self.seed.read_bytes())
-        self.assertEqual(self.requests.read_text(), "")
+        self.assertEqual(self.requests.read_text(), customize.EMPTY_CUSTOM_OPTIONS)
+        self.assertEqual(customize.read_fragment(self.requests), {})
         validate.check_config(self.config, False)
         customize.check_config(self.requests, self.config)
         output = self.root / "feeds.conf"

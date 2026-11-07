@@ -8,14 +8,25 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 from zoneinfo import ZoneInfo
 
 import validate
+from customize import EMPTY_CUSTOM_OPTIONS
 
 
 HONK_FEED_URL = "https://github.com/kenzok8/openwrt-honk"
+SOURCE_CHECKSUMS = "source-sha256sums.txt"
+
+
+def file_digest(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def verify_assets(artifacts):
@@ -34,16 +45,34 @@ def verify_assets(artifacts):
     if set(expected) != {path.name for path in files if path.name != "sha256sums"}:
         raise ValueError("SHA256 manifest does not cover all firmware assets")
     for name, expected_digest in expected.items():
-        digest = hashlib.sha256()
-        with (artifacts / name).open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(chunk)
-        if digest.hexdigest() != expected_digest:
+        if file_digest(artifacts / name) != expected_digest:
             raise ValueError(f"SHA256 mismatch: {name}")
+    for path in files:
+        validate.require(path.stat().st_size > 0 or path.name == "custom-options.config",
+                         f"Unexpected empty release asset: {path.name}")
     if len(list(artifacts.glob("*netcore_n60-pro*-sysupgrade.itb"))) != 1:
         raise ValueError("Expected one verified N60 Pro sysupgrade image")
     validate.check_release(artifacts / "openwrt_release", artifacts / "firmware-version.json")
     return sorted(path.name for path in files)
+
+
+def stage_assets(artifacts, output):
+    """Normalize only legacy empty metadata, after verifying the original artifact."""
+    assets = verify_assets(artifacts)
+    options = artifacts / "custom-options.config"
+    if not options.exists() or options.stat().st_size:
+        return artifacts, assets
+    validate.require(not (artifacts / SOURCE_CHECKSUMS).exists(),
+                     f"Reserved recovery filename already exists: {SOURCE_CHECKSUMS}")
+    staged = output / "assets"
+    shutil.copytree(artifacts, staged)
+    (staged / SOURCE_CHECKSUMS).write_bytes((artifacts / "sha256sums").read_bytes())
+    (staged / "custom-options.config").write_text(EMPTY_CUSTOM_OPTIONS)
+    (staged / "sha256sums").write_text("".join(
+        f"{file_digest(path)}  {path.name}\n"
+        for path in sorted(staged.iterdir()) if path.name != "sha256sums"
+    ))
+    return staged, verify_assets(staged)
 
 
 def read_honk_metadata(artifacts):
@@ -92,15 +121,28 @@ def prepare_release(artifacts, repository, target, run_id, run_attempt, now=None
         "honk_feed_commit": honk_feed_commit,
         "url": f"https://github.com/{repository}/releases/tag/{tag}",
         "assets": assets,
+        "normalized_assets": [name for name in assets
+                              if (artifacts / name).stat().st_size == 0],
     }
 
 
 def publish(metadata, artifacts, output):
     output.mkdir(parents=True, exist_ok=True)
+    upload_dir, assets = stage_assets(artifacts, output)
+    validate.require(all((upload_dir / name).stat().st_size > 0 for name in assets),
+                     "Release uploads must not contain empty files")
+    metadata = {**metadata, "assets": assets}
     (output / "release.json").write_text(json.dumps(metadata, indent=2) + "\n")
     notes = output / "notes.md"
     package_notes = "\n".join(f"- `{name}` `{version}`" for name, version in metadata["honk_versions"].items())
     honk_commit = metadata["honk_feed_commit"]
+    recovery_note = ""
+    if metadata["normalized_assets"]:
+        recovery_note = (
+            "兼容补发：原始 custom-options.config 为零字节，发布副本已添加空选项说明注释。"
+            "固件镜像及其它原始附件内容保持不变。sha256sums 校验当前发布附件；"
+            f"{SOURCE_CHECKSUMS} 保留原 artifact 的校验记录，仅供来源追溯。\n\n"
+        )
     notes.write_text(
         f"固件版本：{metadata['name']}\n\n"
         f"设备：Netcore N60 Pro / ImmortalWrt 25.12 / Linux 6.12 / UBI-FIT。\n\n"
@@ -109,13 +151,14 @@ def publish(metadata, artifacts, output):
         f"来源构建：[GitHub Actions]({metadata['source_run_url']})。\n\n"
         f"配置提交：`{metadata['target']}`。\n\n"
         f"Release 创建时间：{metadata['created_at']}（Asia/Shanghai）。\n\n"
+        f"{recovery_note}"
         "产物已通过构建验收与 SHA256 校验；下载后可使用 sha256sums 核对文件。\n"
         "镜像布局说明见随附 DEVICE-LAYOUT.txt 和仓库 README。\n"
     )
     # Upload everything to a draft first so partially uploaded firmware is not published.
     subprocess.run([
         "gh", "release", "create", metadata["tag"],
-        *[str((artifacts / name).resolve()) for name in metadata["assets"]],
+        *[str((upload_dir / name).resolve()) for name in metadata["assets"]],
         "--repo", metadata["repository"], "--target", metadata["target"],
         "--title", metadata["name"], "--notes-file", str(notes.resolve()), "--draft",
     ], check=True)

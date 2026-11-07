@@ -120,6 +120,70 @@ class FirmwareReleaseTests(unittest.TestCase):
                 publish_release.publish(self.metadata(), self.artifacts, self.root / "metadata")
         self.assertEqual(run.call_count, 1)
 
+    def test_legacy_empty_options_are_normalized_without_changing_source_or_firmware(self):
+        options = self.artifacts / "custom-options.config"
+        options.write_bytes(b"")
+        self.write_checksums()
+        original = {path.name: path.read_bytes() for path in self.artifacts.iterdir()}
+        metadata = self.metadata()
+        self.assertEqual(metadata["normalized_assets"], ["custom-options.config"])
+        output = self.root / "recovery"
+        with patch("publish_release.subprocess.run") as run:
+            publish_release.publish(metadata, self.artifacts, output)
+        staged = output / "assets"
+        self.assertEqual(options.read_bytes(), b"")
+        self.assertEqual({path.name: path.read_bytes() for path in self.artifacts.iterdir()}, original)
+        for name, content in original.items():
+            if name not in ("custom-options.config", "sha256sums"):
+                self.assertEqual((staged / name).read_bytes(), content)
+        self.assertEqual((staged / "custom-options.config").read_text(), publish_release.EMPTY_CUSTOM_OPTIONS)
+        self.assertEqual((staged / publish_release.SOURCE_CHECKSUMS).read_bytes(), original["sha256sums"])
+        publish_release.verify_assets(staged)
+        create = run.call_args_list[0].args[0]
+        for path in staged.iterdir():
+            self.assertGreater(path.stat().st_size, 0)
+            self.assertIn(str(path.resolve()), create)
+        notes = (output / "notes.md").read_text()
+        self.assertIn("兼容补发", notes)
+        self.assertIn(publish_release.SOURCE_CHECKSUMS, notes)
+
+    def test_empty_firmware_or_other_asset_is_rejected_before_creating_release(self):
+        for name in (self.image.name, "unexpected-empty.txt"):
+            with self.subTest(name=name):
+                path = self.artifacts / name
+                original = path.read_bytes() if path.exists() else None
+                path.write_bytes(b"")
+                self.write_checksums()
+                with patch("publish_release.subprocess.run") as run:
+                    with self.assertRaisesRegex(ValueError, "Unexpected empty release asset"):
+                        self.metadata()
+                    run.assert_not_called()
+                if original is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(original)
+
+    def test_legacy_options_cannot_be_changed_before_source_checksum_verification(self):
+        options = self.artifacts / "custom-options.config"
+        options.write_bytes(b"")
+        self.write_checksums()
+        options.write_text("changed\n")
+        with self.assertRaisesRegex(ValueError, "SHA256 mismatch: custom-options.config"):
+            publish_release.stage_assets(self.artifacts, self.root / "recovery")
+        self.assertFalse((self.root / "recovery/assets").exists())
+
+    def test_nonempty_custom_options_are_uploaded_unchanged(self):
+        options = self.artifacts / "custom-options.config"
+        options.write_text("CONFIG_PACKAGE_tcpdump=y\n")
+        self.write_checksums()
+        metadata = self.metadata()
+        self.assertEqual(metadata["normalized_assets"], [])
+        output = self.root / "metadata"
+        with patch("publish_release.subprocess.run") as run:
+            publish_release.publish(metadata, self.artifacts, output)
+        self.assertIn(str(options.resolve()), run.call_args_list[0].args[0])
+        self.assertFalse((output / "assets").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
