@@ -134,7 +134,7 @@ bash scripts/check-config.sh
 
 当前固件的 Honk、设备、BTF/内核等基本要求继续校验；原来排除的其他代理核心、DNS 代理和 TurboACC/SFE 等选项仍会被拒绝。此入口用于在现有固件基础上增加插件。自定义的选项若在云端 `make defconfig` 后被改值或丢弃，CI 会报出对应选项；选为 `=y` 的真实插件包还必须出现在最终 manifest 中，特性开关不会误判成软件包。
 
-合并后的 `feeds.conf.default` 和 `custom-options.config` 会随固件及日志保存。后者记录 `custom.config` 的显式选项及 DIY 对基础种子的有效选项变更；`build-inputs.txt` 同时记录这些要求、固件配置提交和所有 feed 的实际 SHA。修改四个自定义入口中的任意一个都会在推送后触发现有构建流程。
+合并后的 `feeds.conf.default` 和 `custom-options.config` 会随固件及日志保存。后者记录 `custom.config` 的显式选项及 DIY 对基础种子的有效选项变更；没有自定义选项时写入一行说明注释，避免产生零字节 Release 附件。`build-inputs.txt` 同时记录这些要求、固件配置提交和所有 feed 的实际 SHA。修改四个自定义入口中的任意一个都会在推送后触发现有构建流程。
 
 ## 文件
 
@@ -154,6 +154,8 @@ bash scripts/check-config.sh
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核、manifest 及实际 rootfs；确认 OpenClash 未预装核心 |
 | `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
 | `scripts/publish_release.py` | 校验产物并创建 Release，正文记录实际安装的 Honk 软件包版本和上游提交 |
+| `scripts/resolve_publish.py` | 核对来源运行最新 attempt 的成功构建、固件验收和匹配 artifact，支持发布失败后的补发 |
+| `scripts/test_resolve_publish.py` | 验证失败运行补发、来源/attempt/产物匹配、分页和并发重跑保护 |
 | `scripts/test_release.py` | 回归验证发布时间、Honk 版本、资产校验及草稿上传后发布 |
 | `scripts/test_openclash.py` | 验证备用应用放行范围、默认关闭及未预装内核 |
 | `scripts/cleanup_runs.py` | 分页读取仓库运行记录并按最近次数清理，默认仅预览 |
@@ -171,7 +173,7 @@ bash scripts/check-config.sh
 
 1. 推送本仓库到 GitHub。向 `main`、`develop` 或 `feature/**` 分支推送构建配置、feeds、脚本、`files/` 或 workflow 的改动时，会自动构建。仅修改 README/计划文档不会触发昂贵的固件编译。
 2. 打开 **Actions → N60 Pro - ImmortalWrt 6.12 + Honk** 查看进度。
-3. 手动重建可用 **Run workflow**，将 `publish_run_id` 留空，`cleanup_only` 保持关闭。若只想补发已有成功构建的 Release，填写仍保留的成功运行数字 ID，即可跳过构建、直接校验并发布该次产物。源运行必须是本 workflow 的成功运行，且最新一次尝试的固件 artifact 尚未过期。GitHub 要求 workflow 文件先存在于默认分支，按钮才会出现；首次推送功能分支时可先通过 `push` 事件构建。
+3. 手动重建可用 **Run workflow**，将 `publish_run_id` 留空，`cleanup_only` 保持关闭。若只想补发已有固件的 Release，填写来源运行的数字 ID，即可跳过构建、直接校验并发布该次产物。来源必须是本仓库、本 workflow 的已结束运行，其最新一次 attempt 的 `build`、固件编译/验收及 artifact 上传均须成功，并且对应 artifact 尚未过期。允许运行因后续 `publish` 或 `cleanup` 失败而整体为 failure。GitHub 要求 workflow 文件先存在于默认分支，按钮才会出现；手动操作可选择已推送的修复分支执行新发布脚本。
 4. 同一分支的新构建会取消该分支尚未完成的旧构建。不同分支互不影响。
 5. 定时构建安排在**北京时间每周一 08:00**，对应 cron `0 0 * * 1`（UTC）。配置推送到默认分支 `develop` 后生效，使用默认分支最新提交完成构建与 Release 发布。GitHub 的计划触发可能因队列负载延迟，实际开始时间以 Actions 为准。
 6. 只清理历史运行时，在 **Run workflow** 勾选 `cleanup_only`。该选项优先于 `publish_run_id`，会跳过编译和发布；使用独立并发组，不会取消同分支正在运行的构建。
@@ -188,7 +190,7 @@ git push -u origin develop
 
 构建和发布结束后自动清理，构建失败时也会执行。仓库范围内按创建时间保留最近 **10 次 workflow run**，跨分支统计，成功、失败和取消的记录均计入。当前运行和仍未完成的旧任务额外保留，不主动取消；因此未完成任务较多时，数量可暂时超过 10。
 
-清理前先完整读取所有分页，再决定删除集合；逐条删除前重查状态，跳过已经重新运行的任务。各分支的清理 job 在仓库范围内串行执行。删除旧 run 时，其日志和 Actions artifacts 也会被删除，已发布到 Release 的固件资产和 Git tag 保留。补发 Release 需要使用尚未被清理的成功运行。
+清理前先完整读取所有分页，再决定删除集合；逐条删除前重查状态，跳过已经重新运行的任务。各分支的清理 job 在仓库范围内串行执行。删除旧 run 时，其日志和 Actions artifacts 也会被删除，已发布到 Release 的固件资产和 Git tag 保留。补发 Release 需要来源运行的最新 attempt 已成功构建，且对应 artifact 尚未被清理或过期。
 
 本地可使用已登录的 GitHub CLI 预览同一规则，不编译固件：
 
@@ -220,6 +222,8 @@ Actions artifacts 同时受最近 10 次运行的保留规则约束，所属旧�
 固件 artifact 中的全部文件还会作为独立资产发布到 [Releases](https://github.com/go-laoji/netcore-n60-pro-honk/releases)。发布前再次验证完整的 `sha256sums` 和实际固件版本；先上传到草稿，全部成功后公开，避免公开缺少文件的固件。
 
 Release 正文从该次固件的 manifest 读取 `honk` 和 `luci-app-honk` 的完整包版本，并从 `build-inputs.txt` 读取 `openwrt-honk` 的实际提交。正文分别列出上游提交链接和固件配置提交。用 `publish_run_id` 补发时，版本和提交均取自源构建的产物。
+
+历史 artifact 若包含零字节 `custom-options.config`，发布前先验证原始附件的完整 SHA256，再在独立发布副本中为该记录补一行说明注释，并重新生成发布附件的 `sha256sums`；固件镜像及其它数据文件保持原样。额外的 `source-sha256sums.txt` 保存源 artifact 的校验记录，仅用于来源追溯。下载 Release 后使用 `sha256sums` 校验当前附件。其它零字节附件会在创建草稿前被拒绝；无需重新编译固件。
 
 Release 名称使用最终 `openwrt_release` 的 `DISTRIB_DESCRIPTION`，追加**创建 Release 时**的北京时间 `HH:MM`，例如 `ImmortalWrt 25.12-SNAPSHOT rXXXXX-abcdef go-laoji-10/31 21:35`。时分在编译完成后的发布步骤中取得；固件内的 `go-laoji-MM/DD` 仍表示编译配置日期，跨日补发时保持原值。Git tag 使用合法化的版本名和发布年月日时分，例如 `firmware-immortalwrt-25-12-snapshot-rxxxxx-abcdef-go-laoji-10-31-20261031-2135`，并指向生成该固件的仓库提交；已有 Release 不会被覆盖。
 

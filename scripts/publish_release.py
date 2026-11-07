@@ -140,7 +140,7 @@ def publish(metadata, artifacts, output):
     if metadata["normalized_assets"]:
         recovery_note = (
             "兼容补发：原始 custom-options.config 为零字节，发布副本已添加空选项说明注释。"
-            "固件镜像及其它原始附件内容保持不变。sha256sums 校验当前发布附件；"
+            "仅更新该记录和发布校验清单，固件镜像未修改。sha256sums 校验当前发布附件；"
             f"{SOURCE_CHECKSUMS} 保留原 artifact 的校验记录，仅供来源追溯。\n\n"
         )
     notes.write_text(
