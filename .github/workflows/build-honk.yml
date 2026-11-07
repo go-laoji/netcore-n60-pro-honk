@@ -25,6 +25,10 @@ on:
       - '.github/workflows/build-honk.yml'
       - 'build.env'
       - 'feeds.conf.default'
+      - 'feeds.conf.custom'
+      - 'custom.config'
+      - 'diy-part1.sh'
+      - 'diy-part2.sh'
       - 'immortalwrt-netcore-n60-pro-honk.config'
       - 'scripts/**'
       - 'files/**'
@@ -62,15 +66,7 @@ jobs:
       - name: Validate configuration inputs
         run: |
           mkdir -p build-logs
-          bash -n scripts/prepare-source.sh
-          sh -n files/etc/uci-defaults/99-honk-routing
-          sh -n files/etc/uci-defaults/zz-honk-ui
-          sh -n files/etc/uci-defaults/zz-openclash-backup
-          python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
-          python3 -B scripts/test_ci_config.py
-          python3 -B scripts/test_release.py
-          python3 -B scripts/test_openclash.py
-          python3 -B scripts/test_cleanup_runs.py
+          bash scripts/check-config.sh
 
       - name: Prepare Linux build environment
         env:
@@ -101,10 +97,12 @@ jobs:
             "$GITHUB_WORKSPACE/build-logs/defconfig.log"
           python3 "$GITHUB_WORKSPACE/scripts/validate.py" config .config --expanded \
             --version-file firmware-version.json --package-info tmp/.packageinfo
+          python3 "$GITHUB_WORKSPACE/scripts/customize.py" check-config custom-options.config .config
           ./scripts/diffconfig.sh > "$GITHUB_WORKSPACE/build-logs/config.diff"
           cp .config "$GITHUB_WORKSPACE/build-logs/expanded.config"
           cp build-inputs.txt "$GITHUB_WORKSPACE/build-logs/"
           cp firmware-version.json "$GITHUB_WORKSPACE/build-logs/"
+          cp custom-options.config feeds.conf.default "$GITHUB_WORKSPACE/build-logs/"
           echo "FIRMWARE_TAG=$(jq -r .filename_tag firmware-version.json)" >> "$GITHUB_ENV"
           echo "FIRMWARE_LABEL=$(jq -r .display_label firmware-version.json)" >> "$GITHUB_ENV"
 
@@ -135,6 +133,8 @@ jobs:
             exit 1
           fi
           python3 scripts/validate.py manifest "${manifests[0]}"
+          python3 scripts/customize.py check-manifest "$OPENWRT_DIR/custom-options.config" \
+            "${manifests[0]}" --package-info "$OPENWRT_DIR/tmp/.packageinfo"
 
       - name: Verify version embedded in the firmware rootfs
         run: |
@@ -176,6 +176,7 @@ jobs:
           cp build-logs/openwrt_release artifacts/
           cp "$OPENWRT_DIR/firmware-version.json" artifacts/
           cp "$OPENWRT_DIR/build-inputs.txt" artifacts/
+          cp "$OPENWRT_DIR/custom-options.config" "$OPENWRT_DIR/feeds.conf.default" artifacts/
           cat > artifacts/DEVICE-LAYOUT.txt <<'EOF'
           Netcore N60 Pro / ImmortalWrt openwrt-25.12 / Linux 6.12 / UBI-FIT
           This image requires the matching upstream UBI/FIT boot and partition layout.
@@ -207,6 +208,8 @@ jobs:
             /workdir/openwrt/.config
             /workdir/openwrt/build-inputs.txt
             /workdir/openwrt/firmware-version.json
+            /workdir/openwrt/custom-options.config
+            /workdir/openwrt/feeds.conf.default
             /workdir/openwrt/tmp/.config-package.in
             /workdir/openwrt/tmp/.packageinfo
             /workdir/openwrt/logs/
