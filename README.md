@@ -69,14 +69,87 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 
 上游发行版本、源码 revision 和软件源地址继续保留。镜像文件名使用无斜杠的 `go-laoji-10-31`，版本代码不进入文件名；产物同时保存 `firmware-version.json` 和实际 rootfs 的 `openwrt_release`。标识生成和实际固件描述都经过 Actions 验收，日期取当次准备构建配置的时间，不固定为本文日期。
 
+## 自定义添加插件
+
+保持 ImmortalWrt `openwrt-25.12` 单源构建。日常添加插件只需编辑根目录的 `custom.config` 和可选的 `feeds.conf.custom`，无需修改基础种子或 workflow。这两个入口默认只有注释，不增加任何插件或来源。
+
+### 从现有 feeds 选择插件
+
+在 `custom.config` 中添加软件包选项，例如：
+
+```text
+CONFIG_PACKAGE_tcpdump=y
+CONFIG_PACKAGE_luci-app-statistics=y
+CONFIG_PACKAGE_luci-i18n-statistics-zh-cn=y
+```
+
+软件包名称以对应源码的包定义为准，管理页和中文翻译分别选择。`=y` 表示内置进固件；`=m` 只构建独立包，不会内置，当前 Release 也不收集独立插件包。关闭可选项使用 `# CONFIG_PACKAGE_xxx is not set`。同一个文件内不能重复定义同一选项；与基础种子重名时，合并工具会替换原值，避免产生重复配置。
+
+### 添加额外插件源
+
+插件不在现有 feeds 中时，在 `feeds.conf.custom` 追加来源，并在 `custom.config` 选择其中的软件包。例如下面的仓库地址和包名需换成自己的实际值：
+
+```text
+# feeds.conf.custom
+src-git myplugins https://github.com/your-name/openwrt-packages.git;main
+```
+
+```text
+# custom.config
+CONFIG_PACKAGE_luci-app-example=y
+```
+
+额外 feed 追加在内置 feeds 之后；仅添加来源不会把其中全部插件装入固件。名称使用字母、数字或下划线，且不能与已有 feed 重名。使用 `src-git NAME https://URL;BRANCH`，明确写出分支，不填写固定 SHA；每次 Actions 跟随该分支，并记录实际检出的提交。
+
+### 使用 DIY 脚本扩展
+
+沿用参考项目的两个入口，默认只含注释和严格错误处理：
+
+| 入口 | 执行时机 | 适合的操作 |
+| --- | --- | --- |
+| `diy-part1.sh` | 合并 feeds 后、`feeds update -a` 前 | 复制或克隆独立插件源码、补充 feed |
+| `diy-part2.sh` | feeds 安装完成，基础 `.config` 和 `files/` 复制后 | 修补插件源码、调整注册包优先级、增加默认设置 |
+
+两个脚本都在 OpenWrt 源码根目录执行，`PROJECT_DIR` 指向本配置仓库，`OPENWRT_DIR` 指向源码目录。脚本通过 Bash 调用，无需额外设置可执行位；执行失败会中止准备阶段。
+
+对于只有一个插件的独立仓库，可在 `diy-part1.sh` 中克隆到 `package/custom/`，再在 `custom.config` 中选择它。优先使用额外 feed，便于统一记录和检查上游提交。独立 clone 的提交如需追溯，可由 DIY 脚本打印到准备日志。
+
+已有同名包时，默认仍使用原有 feed 顺序和本仓库指定的包来源。若确实需要使用自定义 feed 提供的同名版本，可在 `diy-part2.sh` 明确指定：
+
+```sh
+./scripts/feeds install -f -p myplugins luci-app-example
+```
+
+配置顺序为 **基础种子 → `diy-part2.sh` 的修改 → `custom.config` → 日期版本标识 → 云端配置展开**。日常包选择写进 `custom.config`；DIY 脚本适合配置片段不能完成的处理。
+
+### 校验与输入记录
+
+本地运行与 CI 输入阶段相同的检查：
+
+```sh
+bash scripts/check-config.sh
+```
+
+该命令只检查脚本语法、配置合并、feeds 格式和临时样例回归测试，不执行用户 DIY 脚本、不拉取源码、不运行 OpenWrt `make`。测试中的准备流程使用临时源码样例和命令替身。插件是否兼容实际上游及能否编译，仍由后续 GitHub Actions 构建验证。
+
+当前固件的 Honk、设备、BTF/内核等基本要求继续校验；原来排除的其他代理核心、DNS 代理和 TurboACC/SFE 等选项仍会被拒绝。此入口用于在现有固件基础上增加插件。自定义的选项若在云端 `make defconfig` 后被改值或丢弃，CI 会报出对应选项；选为 `=y` 的真实插件包还必须出现在最终 manifest 中，特性开关不会误判成软件包。
+
+合并后的 `feeds.conf.default` 和 `custom-options.config` 会随固件及日志保存。后者记录 `custom.config` 的显式选项及 DIY 对基础种子的有效选项变更；`build-inputs.txt` 同时记录这些要求、固件配置提交和所有 feed 的实际 SHA。修改四个自定义入口中的任意一个都会在推送后触发现有构建流程。
+
 ## 文件
 
 | 文件 | 用途 |
 | --- | --- |
 | `build.env` | 固件源码仓库和需要跟随的分支，不固定提交 |
 | `feeds.conf.default` | Honk、官方 packages/LuCI/routing、QuickStart 和 iStore 各自跟随的分支 |
-| `immortalwrt-netcore-n60-pro-honk.config` | 唯一的设备及软件包配置种子 |
+| `immortalwrt-netcore-n60-pro-honk.config` | 基础设备及默认软件包配置种子 |
+| `custom.config` | 自定义插件和选项片段，最后覆盖基础配置及 DIY 配置 |
+| `feeds.conf.custom` | 额外插件 feeds，追加在内置 feeds 之后 |
+| `diy-part1.sh` / `diy-part2.sh` | feeds 更新前 / 安装后的 DIY 扩展脚本 |
 | `scripts/prepare-source.sh` | Actions Linux runner 中拉取分支最新源码、记录实际 SHA、验证版本、安装 feeds、复制配置 |
+| `scripts/check-config.sh` | 本地及 CI 共用的输入检查入口，不下载或编译固件 |
+| `scripts/customize.py` | 合并自定义配置/feeds，验收展开选项及固件内置插件 |
+| `scripts/test_customization.py` | 验证空输入、覆盖、feeds、插件验收及 DIY 顺序/失败中止 |
 | `scripts/stamp-version.py` | 以北京时间生成固件显示标识及文件名标识，保留上游发行版本和软件源 |
 | `scripts/validate.py` | 只读检查配置、设备源码、目标内核、manifest 及实际 rootfs；确认 OpenClash 未预装核心 |
 | `scripts/test_ci_config.py` | 回归验证 Kconfig 错误识别和版本选项的父开关 |
@@ -90,6 +163,7 @@ Actions 准备配置时按 **Asia/Shanghai** 时区记录当次构建日期，�
 | `files/etc/uci-defaults/zz-openclash-backup` | 默认关闭 OpenClash，设置 ARM64 内核及运行时内存模式 |
 | `.github/workflows/build-honk.yml` | 固件构建、验收和 Release 发布流程 |
 | `docs/implementation-plan.md` | 实施范围、验证边界与完成状态 |
+| `docs/custom-plugin-plan.md` | 自定义插件入口的范围、实施与验证记录 |
 
 ## 触发 GitHub Actions
 
@@ -166,36 +240,28 @@ Release 名称使用最终 `openwrt_release` 的 `DISTRIB_DESCRIPTION`，追加*
 
 `build.env` 只配置固件源码仓库及 `FIRMWARE_BRANCH=openwrt-25.12`，不配置固定 SHA。每次 Actions 运行时都会获取该分支当时的最新提交，并将实际 SHA 写入 `build-inputs.txt`，随固件和日志保存。上游有更新后，手动运行 Actions 或按上文推送构建配置即可使用新代码；上游提交本身不会自动触发本仓库构建。
 
-每次构建也会获取 `feeds.conf.default` 中七个 feed 各自分支的最新提交。官方 `packages`、`luci` 和 `routing` 跟随 `openwrt-25.12` 兼容分支。Honk、QuickStart 的 LuCI 页面和 iStore 跟随 `main`，QuickStart 后端跟随 `master`。各 feed 实际检出的 SHA 写入 `build-inputs.txt`。
+每次构建也会获取 `feeds.conf.default` 中七个内置 feed 及 `feeds.conf.custom` 中额外 feed 各自分支的最新提交。官方 `packages`、`luci` 和 `routing` 跟随 `openwrt-25.12` 兼容分支。Honk、QuickStart 的 LuCI 页面和 iStore 跟随 `main`，QuickStart 后端跟随 `master`。各 feed 实际检出的 SHA 写入 `build-inputs.txt`。
 
 Honk 和 LuCI 的包定义分别指定 aarch64 核心和 Doona 归档及其 SHA256，构建时下载并校验。固件构建无需另行维护 Rust/Zig/Node 编译链。 [Honk 包定义](https://github.com/kenzok8/openwrt-honk/blob/main/honk/Makefile) · [LuCI 包定义](https://github.com/kenzok8/openwrt-honk/blob/main/luci-app-honk/Makefile)
 
 以下命令只做本地只读检查，不展开 OpenWrt 配置，也不构建固件：
 
 ```sh
-bash -n scripts/prepare-source.sh
-sh -n files/etc/uci-defaults/99-honk-routing
-sh -n files/etc/uci-defaults/zz-honk-ui
-sh -n files/etc/uci-defaults/zz-openclash-backup
-python3 scripts/validate.py config immortalwrt-netcore-n60-pro-honk.config
-python3 -B scripts/test_ci_config.py
-python3 -B scripts/test_release.py
-python3 -B scripts/test_openclash.py
-python3 -B scripts/test_cleanup_runs.py
+bash scripts/check-config.sh
 git diff --check
 ```
 
 如果本机已有 ShellCheck/actionlint，还可运行：
 
 ```sh
-shellcheck -x -P SCRIPTDIR scripts/prepare-source.sh
+shellcheck -x -P SCRIPTDIR scripts/prepare-source.sh scripts/check-config.sh diy-part1.sh diy-part2.sh
 shellcheck -s sh files/etc/uci-defaults/99-honk-routing
 shellcheck -s sh files/etc/uci-defaults/zz-honk-ui
 shellcheck -s sh files/etc/uci-defaults/zz-openclash-backup
 actionlint .github/workflows/build-honk.yml
 ```
 
-开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)、[Release 发布 Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)、[OpenClash 备用代理 Issue #8](https://github.com/go-laoji/netcore-n60-pro-honk/issues/8)、[每周构建与记录清理 Issue #9](https://github.com/go-laoji/netcore-n60-pro-honk/issues/9)。
+开发跟踪：[Issue #1](https://github.com/go-laoji/netcore-n60-pro-honk/issues/1)、[家庭网络和版本标识 Issue #3](https://github.com/go-laoji/netcore-n60-pro-honk/issues/3)、[Argon 和 QuickStart Issue #4](https://github.com/go-laoji/netcore-n60-pro-honk/issues/4)、[源码跟随分支 Issue #5](https://github.com/go-laoji/netcore-n60-pro-honk/issues/5)、[CI 配置修复 Issue #6](https://github.com/go-laoji/netcore-n60-pro-honk/issues/6)、[Release 发布 Issue #7](https://github.com/go-laoji/netcore-n60-pro-honk/issues/7)、[OpenClash 备用代理 Issue #8](https://github.com/go-laoji/netcore-n60-pro-honk/issues/8)、[每周构建与记录清理 Issue #9](https://github.com/go-laoji/netcore-n60-pro-honk/issues/9)、[自定义插件入口 Issue #12](https://github.com/go-laoji/netcore-n60-pro-honk/issues/12)。
 
 ## 许可与致谢
 
