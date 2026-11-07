@@ -177,13 +177,15 @@ args = sys.argv[1:]
 if args[0] == 'init':
     shutil.copytree(os.environ['CUSTOM_TEST_TEMPLATE'], args[1])
 elif 'rev-parse' in args:
-    print('a' * 40)
+    mismatch = os.environ.get('CUSTOM_TEST_BAD_HEAD') and 'HEAD' in args and args[1].startswith('feeds/')
+    print(('b' if mismatch else 'a') * 40)
 elif 'get-url' in args:
     feed = pathlib.Path(args[1]).name
     for line in pathlib.Path('feeds.conf.default').read_text().splitlines():
         fields = line.split()
         if len(fields) == 3 and fields[:2] == ['src-git', feed]:
-            print(fields[2].split(';')[0])
+            print('https://github.com/example/wrong.git' if os.environ.get('CUSTOM_TEST_BAD_ORIGIN')
+                  else fields[2].split(';')[0])
 ''')
         # A fake feed tool creates package definitions for the existing presence checks.
         self.write_script(self.template / "scripts/feeds", f"#!{sys.executable}\n" + '''
@@ -268,6 +270,26 @@ if sys.argv[1] == 'update':
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("expected src-git", result.stderr)
         self.assertEqual(self.events.read_text(), "before\n")
+
+    def test_feed_without_final_newline_is_still_recorded(self):
+        with (self.project / "diy-part1.sh").open("a") as hook:
+            hook.write("printf 'src-git last https://github.com/example/last.git;main' >> feeds.conf.default\n")
+        result = self.run_prepare()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("src-git last https://github.com/example/last.git^" + "a" * 40,
+                      (self.source / "build-inputs.txt").read_text())
+
+    def test_changed_feed_head_is_rejected(self):
+        self.env["CUSTOM_TEST_BAD_HEAD"] = "1"
+        result = self.run_prepare()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Feed revision mismatch", result.stderr)
+
+    def test_changed_feed_repository_is_rejected(self):
+        self.env["CUSTOM_TEST_BAD_ORIGIN"] = "1"
+        result = self.run_prepare()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Feed repository mismatch", result.stderr)
 
 
 if __name__ == "__main__":
