@@ -12,6 +12,7 @@ import validate
 
 OPTION = re.compile(r"(CONFIG_[A-Za-z0-9_-]+)=(.*)")
 DISABLED = re.compile(r"# (CONFIG_[A-Za-z0-9_-]+) is not set")
+EMPTY_CUSTOM_OPTIONS = "# No custom plugin options.\n"
 
 
 def read_fragment(path):
@@ -61,7 +62,7 @@ def merge_config(base, custom, output, requests=None, seed=None):
         baseline = read_fragment(seed or base)
         requested = {key: value for key, value in combined.items()
                      if value != baseline.get(key, "n") or key in extra}
-        requests.write_text(render_options(requested))
+        requests.write_text(render_options(requested) or EMPTY_CUSTOM_OPTIONS)
     output.write_text(text)
 
 
