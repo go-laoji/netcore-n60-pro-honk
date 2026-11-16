@@ -59,6 +59,21 @@ class ConfigurationRegressionTests(unittest.TestCase):
         self.assertEqual(config["CONFIG_PACKAGE_tar"], "y")
         self.assertEqual(config["CONFIG_PACKAGE_xz-utils"], "y")
 
+    def test_openclash_keeps_ruby_and_yaml_with_yjit_disabled(self):
+        seed = Path(__file__).resolve().parent.parent / "immortalwrt-netcore-n60-pro-honk.config"
+        config = validate.read_config(seed)
+        self.assertEqual(config["CONFIG_PACKAGE_luci-app-openclash"], "y")
+        self.assertEqual(config["CONFIG_PACKAGE_ruby"], "y")
+        self.assertEqual(config["CONFIG_PACKAGE_ruby-yaml"], "y")
+        self.assertEqual(config["CONFIG_RUBY_ENABLE_YJIT"], "n")
+        with tempfile.TemporaryDirectory() as directory:
+            reenabled = Path(directory) / "firmware.config"
+            reenabled.write_text(seed.read_text().replace(
+                "# CONFIG_RUBY_ENABLE_YJIT is not set", "CONFIG_RUBY_ENABLE_YJIT=y"
+            ))
+            with self.assertRaisesRegex(ValueError, "Expected CONFIG_RUBY_ENABLE_YJIT=n"):
+                validate.check_config(reenabled, False)
+
     def test_disabled_proxy_feature_toggle_is_not_a_package(self):
         validate.check_proxy_packages(
             {"CONFIG_PACKAGE_honk": "y", "CONFIG_PACKAGE_luci-app-passwall": "n",

@@ -45,7 +45,7 @@ Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态
 
 参考原仓库只选 `luci-app-openclash`、排除 `mihomo` 软件包的方式。该包的 `Build/Compile` 为空，构建阶段只安装管理组件和必要数据，不编译或预下载 OpenClash/Mihomo 内核。Honk 核心随固件安装。 [ImmortalWrt 25.12 的 OpenClash 包定义](https://github.com/immortalwrt/luci/blob/openwrt-25.12/applications/luci-app-openclash/Makefile)
 
-按包定义补齐 `dnsmasq-full`、Ruby/YAML、bash、unzip、`kmod-inet-diag`、`kmod-nft-tproxy` 和 `kmod-tun`。普通 `dnsmasq` 被关闭，启用 `dnsmasq_full_nftset`，与当前 firewall4/nftables 后端配套。
+按包定义补齐 `dnsmasq-full`、Ruby/YAML、bash、unzip、`kmod-inet-diag`、`kmod-nft-tproxy` 和 `kmod-tun`。普通 `dnsmasq` 被关闭，启用 `dnsmasq_full_nftset`，与当前 firewall4/nftables 后端配套。Ruby 显式关闭可选的 YJIT 加速，避免为 OpenClash 引入 Rust 主机编译依赖。
 
 `zz-openclash-backup` 在上游 `luci-openclash` 默认脚本之后执行，设置 `enable=0`、下载架构 `linux-arm64` 和 `small_flash_memory=1`。首次启动保持备用代理关闭；上游服务启动检查在未启用时直接退出，不下载内核、不接管流量。使用小闪存模式时，代理内核和相关数据位于 `/tmp/etc/openclash`，**重启后需要重新下载**；它们不进入只读固件镜像。需要保留已下载内核时，可在 OpenClash 页面关闭小闪存模式，并确认设备可写空间足够。
 

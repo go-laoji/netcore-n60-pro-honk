@@ -51,6 +51,7 @@ REQUIRED_CONFIG = {
     "CONFIG_VERSIONOPT": "y",
     "CONFIG_VERSION_CODE_FILENAMES": "n",
     "CONFIG_PACKAGE_dnsmasq_full_nftset": "y",
+    "CONFIG_RUBY_ENABLE_YJIT": "n",
     **{f"CONFIG_PACKAGE_{name}": "n" for name in EXCLUDED_PACKAGES},
     **{f"CONFIG_PACKAGE_{name}": "y" for name in REQUIRED_PACKAGES},
 }
