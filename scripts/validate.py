@@ -18,7 +18,7 @@ REQUIRED_PACKAGES = (
     "kmod-mt7915e", "kmod-mt7986-firmware", "mt7986-wo-firmware", "kmod-usb3",
     "wpad-openssl", "luci", "luci-base", "luci-app-upnp",
     "luci-i18n-upnp-zh-cn", "miniupnpd-nftables",
-    "luci-theme-argon", "luci-app-argon-config", "luci-i18n-argon-config-zh-cn",
+    "luci-theme-argon", "luci-i18n-argon-config-zh-cn",
     "luci-app-quickstart", "luci-i18n-quickstart-zh-cn", "quickstart", "luci-compat",
     "luci-app-store", "luci-lib-taskd", "luci-lib-xterm", "taskd", "tar", "xz-utils", "libuci-lua",
     "kmod-nft-offload",
@@ -211,16 +211,26 @@ def check_release(path, version_file):
             "Expected upstream release number without custom date suffix")
 
 
-def check_ui(path):
+def check_argon(path):
     assets = path / "www/luci-static/argon"
     require(assets.is_dir() and any(assets.rglob("*.css")), "Argon theme assets are missing")
+    for name in ("etc/config/argon", "www/luci-static/resources/view/argon-config.js",
+                 "usr/share/luci/menu.d/luci-app-argon-config.json",
+                 "usr/share/rpcd/acl.d/luci-app-argon-config.json"):
+        require((path / name).is_file(), f"Argon settings file is missing: {name}")
+    require((path / "usr/lib/lua/luci/i18n/argon-config.zh-cn.lmo").is_file(),
+            "Argon Simplified Chinese translation is missing")
+    require((path / "etc/uci-defaults/zz-honk-ui").is_file(),
+            "Default Argon theme setup is missing")
+
+
+def check_ui(path):
+    check_argon(path)
     backend = path / "usr/sbin/quickstart"
     require(backend.is_file() and backend.stat().st_mode & 0o111,
             "Quickstart executable backend is missing")
     require((path / "usr/lib/lua/luci/controller/quickstart.lua").is_file(),
             "Quickstart LuCI controller is missing")
-    require((path / "etc/uci-defaults/zz-honk-ui").is_file(),
-            "Default Argon theme setup is missing")
     check_openclash(path)
 
 

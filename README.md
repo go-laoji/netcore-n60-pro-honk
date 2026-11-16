@@ -35,11 +35,11 @@
 
 ### Argon 与 QuickStart
 
-默认主题为 **Argon**，同时安装 `luci-app-argon-config` 及中文翻译。`zz-honk-ui` 在主题包默认脚本之后执行，明确将 `luci.main.mediaurlbase` 设置为 `/luci-static/argon`，因此首次启动会使用 Argon。
+默认主题为 **Argon**。设置页面由 `luci-theme-argon` 3.x 提供，简体中文翻译由 `luci-i18n-argon-config-zh-cn` 提供。`zz-honk-ui` 在主题包默认脚本之后执行，将 `luci.main.mediaurlbase` 设置为 `/luci-static/argon`，因此首次启动会使用 Argon。
 
-`luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 和 argon-config 来自 ImmortalWrt 25.12 LuCI feed。QuickStart、其 LuCI 页面和 iStore 组件分别来自 [nas-packages](https://github.com/linkease/nas-packages/tree/master/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/main/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/main)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
+`luci-app-quickstart` 使用 LinkEase 官方正式包，并安装中文翻译、`quickstart` 后端和 `luci-compat`。按其上游依赖，同时安装 iStore、taskd、xterm 库，以及后端所需的磁盘/系统管理工具。Argon 主题及翻译来自 ImmortalWrt 25.12 LuCI feed。QuickStart、其 LuCI 页面和 iStore 组件分别来自 [nas-packages](https://github.com/linkease/nas-packages/tree/master/network/services/quickstart)、[nas-packages-luci](https://github.com/linkease/nas-packages-luci/tree/main/luci/luci-app-quickstart)、[istore](https://github.com/istoreos/istore/tree/main)。这些 feeds 中的其他应用不会因加入 feed 而自动进入固件。
 
-Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态资源、QuickStart 可执行后端、LuCI controller 和默认主题脚本，防止只选中界面却遗漏运行组件。
+Actions 除检查软件包清单外，还会检查实际 rootfs 的 Argon 静态资源、设置页面、简体中文翻译和默认主题脚本，以及 QuickStart 的可执行后端和 LuCI controller。
 
 ### OpenClash 备用代理
 

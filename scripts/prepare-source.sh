@@ -32,20 +32,19 @@ bash "$PROJECT_DIR/diy-part1.sh"
 python3 "$PROJECT_DIR/scripts/customize.py" check-feeds feeds.conf.default
 ./scripts/feeds update -a
 
-test -f feeds/honk/honk/Makefile
-test -f feeds/honk/luci-app-honk/Makefile
-test -f feeds/luci/themes/luci-theme-argon/Makefile
-test -f feeds/luci/applications/luci-app-argon-config/Makefile
-test -f feeds/luci/applications/luci-app-openclash/Makefile
-test -f feeds/nas/network/services/quickstart/Makefile
-test -f feeds/nas_luci/luci/luci-app-quickstart/Makefile
-test -f feeds/istore/luci/luci-app-store/Makefile
-test -f feeds/istore/luci/luci-lib-taskd/Makefile
-test -f feeds/istore/luci/luci-lib-xterm/Makefile
-test -f feeds/istore/luci/taskd/Makefile
+for package in honk/honk honk/luci-app-honk \
+    luci/themes/luci-theme-argon luci/applications/luci-app-openclash \
+    nas/network/services/quickstart nas_luci/luci/luci-app-quickstart \
+    istore/luci/{luci-app-store,luci-lib-taskd,luci-lib-xterm,taskd}; do
+    [[ -f feeds/$package/Makefile ]] || {
+        echo "Missing required package recipe: feeds/$package/Makefile" >&2
+        exit 1
+    }
+done
 ./scripts/feeds install -a
 ./scripts/feeds install -f -p honk honk luci-app-honk
-./scripts/feeds install -f -p luci luci-theme-argon luci-app-argon-config luci-compat luci-app-openclash
+# Argon 3.x ships the settings in the theme and generates the translation package.
+./scripts/feeds install -f -p luci luci-theme-argon luci-compat luci-app-openclash
 ./scripts/feeds install -f -p nas quickstart
 ./scripts/feeds install -f -p nas_luci luci-app-quickstart
 ./scripts/feeds install -f -p istore luci-app-store luci-lib-taskd luci-lib-xterm taskd

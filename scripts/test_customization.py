@@ -198,7 +198,7 @@ if sys.argv[1] == 'update':
     packages = {
         'honk': ['honk', 'luci-app-honk'],
         'luci/themes': ['luci-theme-argon'],
-        'luci/applications': ['luci-app-argon-config', 'luci-app-openclash'],
+        'luci/applications': ['luci-app-openclash'],
         'nas/network/services': ['quickstart'],
         'nas_luci/luci': ['luci-app-quickstart'],
         'istore/luci': ['luci-app-store', 'luci-lib-taskd', 'luci-lib-xterm', 'taskd'],
@@ -244,6 +244,8 @@ if sys.argv[1] == 'update':
         events = self.events.read_text().splitlines()
         self.assertEqual(events[0], "before")
         self.assertEqual(events[1], "feeds update -a")
+        self.assertIn("feeds install -f -p luci luci-theme-argon luci-compat luci-app-openclash", events)
+        self.assertFalse(any("luci-app-argon-config" in event for event in events))
         self.assertEqual(events[-1], "after")
         self.assertEqual(validate.read_config(self.source / ".config")["CONFIG_PACKAGE_tcpdump"], "y")
         self.assertEqual(customize.read_fragment(self.source / "custom-options.config"),

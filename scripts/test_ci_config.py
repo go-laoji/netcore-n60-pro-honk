@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Regression checks for the configuration failures in Actions run 41165282876."""
+"""Regression checks for firmware build configuration and verification."""
 
 import importlib.util
 from pathlib import Path
@@ -70,6 +70,50 @@ class ConfigurationRegressionTests(unittest.TestCase):
         for name, mode in (("luci-app-passwall", "y"), ("sing-box", "m")):
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, "Unexpected proxy package"):
                 validate.check_proxy_packages({f"CONFIG_PACKAGE_{name}": mode}, {name})
+
+
+class ArgonRegressionTests(unittest.TestCase):
+    def test_manifest_requires_theme_and_translation_without_standalone_settings_package(self):
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "firmware.manifest"
+            packages = set(validate.REQUIRED_PACKAGES) - {"luci-app-argon-config"}
+            for missing in (None, "luci-theme-argon", "luci-i18n-argon-config-zh-cn"):
+                with self.subTest(missing=missing):
+                    manifest.write_text("kernel - 6.12.1\n" + "".join(
+                        f"{name} - 1\n" for name in sorted(packages - {missing})
+                    ))
+                    if missing is None:
+                        validate.check_manifest(manifest)
+                    else:
+                        with self.assertRaisesRegex(ValueError, f"missing package: {missing}"):
+                            validate.check_manifest(manifest)
+
+    def test_rootfs_requires_argon_settings_and_translation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            rootfs = Path(directory)
+            required_files = {
+                "www/luci-static/argon/css/cascade.css": "theme assets are missing",
+                "etc/config/argon": "settings file is missing",
+                "www/luci-static/resources/view/argon-config.js": "settings file is missing",
+                "usr/share/luci/menu.d/luci-app-argon-config.json": "settings file is missing",
+                "usr/share/rpcd/acl.d/luci-app-argon-config.json": "settings file is missing",
+                "usr/lib/lua/luci/i18n/argon-config.zh-cn.lmo": "Chinese translation is missing",
+                "etc/uci-defaults/zz-honk-ui": "Default Argon theme setup is missing",
+            }
+            for name in required_files:
+                path = rootfs / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.touch()
+            validate.check_argon(rootfs)
+            for name, error in required_files.items():
+                with self.subTest(missing=name):
+                    path = rootfs / name
+                    path.unlink()
+                    try:
+                        with self.assertRaisesRegex(ValueError, error):
+                            validate.check_argon(rootfs)
+                    finally:
+                        path.touch()
 
 
 if __name__ == "__main__":
